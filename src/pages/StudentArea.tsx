@@ -1,69 +1,85 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/client";
+import { auth, db, googleProvider } from "@/integrations/firebase";
+import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
+import { useNavigate } from "react-router-dom";
 
 export default function StudentArea() {
   const [phone, setPhone] = useState("");
   const [loggedInStudent, setLoggedInStudent] = useState<any>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    // Verifica se o usuário acabou de voltar do login do Google
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user?.email) checkGoogleUser(session.user.email);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user?.email) checkGoogleUser(user.email);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user?.email) checkGoogleUser(session.user.email);
-    });
+    const savedPhone = localStorage.getItem("studentPhone");
+    if (savedPhone) {
+      checkPhoneUser(savedPhone);
+    }
 
-    return () => subscription.unsubscribe();
+    return () => unsubscribe();
   }, []);
 
   const checkGoogleUser = async (email: string) => {
-    const { data } = await supabase.from("students").select("*").eq("email", email).eq("status", "active").maybeSingle();
-    if (data) setLoggedInStudent(data);
+    const q = query(collection(db, "students"), where("email", "==", email), where("status", "==", "active"));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) setLoggedInStudent({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() });
     else {
-      alert("Aluno não encontrado. Verifique se o seu e-mail do Google é o mesmo usado no cadastro da academia.");
-      supabase.auth.signOut();
+      alert("Conta não encontrada. Você será redirecionado para concluir o cadastro.");
+      navigate("/cadastro");
     }
+  };
+
+  const checkPhoneUser = async (phoneStr: string) => {
+    const q = query(collection(db, "students"), where("phone", "==", phoneStr), where("status", "==", "active"));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) setLoggedInStudent({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() });
+    else localStorage.removeItem("studentPhone");
   };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { data } = await supabase.from("students").select("*").eq("phone", phone).eq("status", "active").single();
-    if (data) setLoggedInStudent(data);
-    else alert("Aluno não encontrado. Verifique se o telefone está correto.");
+    const cleanPhone = phone.replace(/\D/g, "");
+    const q = query(collection(db, "students"), where("phone", "==", cleanPhone), where("status", "==", "active"));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      setLoggedInStudent({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() });
+      localStorage.setItem("studentPhone", cleanPhone);
+    } else {
+      alert("Aluno não encontrado. Verifique se o telefone está correto.");
+    }
   };
 
   const handleGoogleLogin = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: window.location.origin + '/student-area',
-        queryParams: {
-          prompt: 'select_account'
-        }
-      }
-    });
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   const handleLogout = async () => {
     setLoggedInStudent(null);
-    await supabase.auth.signOut();
+    localStorage.removeItem("studentPhone");
+    signOut(auth);
   };
 
   const { data: myPayments } = useQuery({
     queryKey: ["my-payments", loggedInStudent?.id],
     enabled: !!loggedInStudent?.id,
     queryFn: async () => {
-      const { data, error } = await supabase.from("payments").select("*").eq("student_id", loggedInStudent.id).order("due_date", { ascending: false });
-      if (error) throw error;
-      return data;
+      const q = query(collection(db, "payments"), where("student_id", "==", loggedInStudent.id));
+      const snapshot = await getDocs(q);
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      return data.sort((a: any, b: any) => new Date(b.due_date).getTime() - new Date(a.due_date).getTime());
     }
   });
 

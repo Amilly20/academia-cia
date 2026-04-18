@@ -1,46 +1,109 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/client";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { toast } from "@/hooks/use-toast";
 import StudentFormDialog from "@/StudentFormDialog";
-import { UserX, Search } from "lucide-react";
-import { useState } from "react";
+import { toast } from "@/hooks/use-toast";
+import { UserX, Search, Trash2, Eye, MoreVertical, Loader2, Calendar, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { getFirebaseData, setFirebaseData } from "@/lib/localStorage";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function Students() {
-  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const [students, setStudents] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [editingDateId, setEditingDateId] = useState<string | null>(null);
+  const [newEnrollmentDate, setNewEnrollmentDate] = useState("");
+  const [editingNameId, setEditingNameId] = useState<string | null>(null);
+  const [newName, setNewName] = useState("");
 
-  const { data: students, isLoading } = useQuery({
-    queryKey: ["students"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("students")
-        .select("*, plans(name, price)")
-        .order("full_name");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const fetchData = async () => {
+    const data = await getFirebaseData();
+    setStudents(Object.values(data.students || {}));
+    setIsLoading(false);
+  };
 
-  const deactivateMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("students").update({ status: "inactive" as const }).eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["students"] });
-      toast({ title: "Aluno desativado" });
-    },
-  });
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const deactivateStudent = async (id: string) => {
+    const data = await getFirebaseData();
+    const studentsArray = Object.values(data.students || {});
+    const updatedStudents = studentsArray.map((s: any) => 
+      s.id === id ? { ...s, status: "inactive" } : s
+    );
+    data.students = updatedStudents;
+    await setFirebaseData(data);
+    setStudents(updatedStudents);
+    toast({ title: "Aluno desativado" });
+  };
+
+  const deleteStudent = async (id: string, name: string) => {
+    if (confirm(`Tem certeza que deseja deletar permanentemente ${name}? Esta ação não pode ser desfeita.`)) {
+      const data = await getFirebaseData();
+      const studentsArray = Object.values(data.students || {});
+      const paymentsArray = Object.values(data.payments || {});
+      const updatedStudents = studentsArray.filter((s: any) => s.id !== id);
+      const updatedPayments = paymentsArray.filter((p: any) => p.student_id !== id);
+      data.students = updatedStudents;
+      data.payments = updatedPayments;
+      await setFirebaseData(data);
+      setStudents(updatedStudents);
+      toast({ title: "Aluno deletado com sucesso" });
+    }
+  };
+
+  const handleSaveEnrollmentDate = async (id: string) => {
+    if (!newEnrollmentDate) {
+      toast({ title: "Selecione uma data", variant: "destructive" });
+      return;
+    }
+    const data = await getFirebaseData();
+    const studentsArray = Object.values(data.students || {});
+    const updatedStudents = studentsArray.map((s: any) =>
+      s.id === id ? { ...s, enrollment_date: newEnrollmentDate } : s
+    );
+    data.students = updatedStudents;
+    await setFirebaseData(data);
+    setStudents(updatedStudents);
+    toast({ title: "Data de matrícula atualizada!" });
+    setEditingDateId(null);
+  };
+
+  const handleSaveName = async (id: string) => {
+    if (!newName.trim()) {
+      toast({ title: "Nome inválido", variant: "destructive" });
+      return;
+    }
+    const data = await getFirebaseData();
+    const studentsArray = Object.values(data.students || {});
+    const updatedStudents = studentsArray.map((s: any) =>
+      s.id === id ? { ...s, full_name: newName } : s
+    );
+    data.students = updatedStudents;
+    await setFirebaseData(data);
+    setStudents(updatedStudents);
+    toast({ title: "Nome atualizado!" });
+    setEditingNameId(null);
+  };
 
   const filtered = students?.filter((s) =>
     (s.full_name || "").toLowerCase().includes(search.toLowerCase()) ||
     (s.phone || "").includes(search)
   );
+  
+  if (isLoading) {
+    return <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -49,7 +112,7 @@ export default function Students() {
           <h1 className="text-3xl font-heading font-bold text-foreground">Alunos</h1>
           <p className="text-muted-foreground mt-1">Gerencie os alunos da academia</p>
         </div>
-        <StudentFormDialog />
+        <StudentFormDialog onStudentCreated={fetchData} />
       </div>
 
       <div className="relative max-w-sm">
@@ -68,57 +131,145 @@ export default function Students() {
             <tr className="border-b border-border bg-muted/50">
               <th className="text-left p-4 text-sm font-medium text-muted-foreground">Nome</th>
               <th className="text-left p-4 text-sm font-medium text-muted-foreground">Telefone</th>
-              <th className="text-left p-4 text-sm font-medium text-muted-foreground">Plano</th>
               <th className="text-left p-4 text-sm font-medium text-muted-foreground">Status</th>
               <th className="text-left p-4 text-sm font-medium text-muted-foreground">Matrícula</th>
               <th className="text-right p-4 text-sm font-medium text-muted-foreground">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {isLoading ? (
-              <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Carregando...</td></tr>
-            ) : !filtered?.length ? (
-              <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Nenhum aluno encontrado</td></tr>
+            {!filtered?.length ? (
+              <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">Nenhum aluno encontrado</td></tr>
             ) : (
               filtered.map((s) => (
                 <tr key={s.id} className="hover:bg-muted/30 transition-colors">
                   <td className="p-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-xs font-bold text-primary-foreground">
-                        {s.full_name.charAt(0)}
-                      </div>
+                      <img 
+                        src={s.profile_picture_url || `https://ui-avatars.com/api/?name=${s.full_name.replace(/\s/g, "+")}&background=random`} 
+                        alt={s.full_name}
+                        className="w-8 h-8 rounded-full object-cover"
+                      />
                       <div>
-                        <p className="font-medium text-card-foreground">{s.full_name}</p>
-                        {s.email && <p className="text-xs text-muted-foreground">{s.email}</p>}
+                        <div className="flex items-center gap-2">
+                          {editingNameId === s.id ? (
+                            <div className="flex items-center gap-2">
+                              <Input
+                                value={newName}
+                                onChange={(e) => setNewName(e.target.value)}
+                                className="h-8 w-40"
+                                autoFocus
+                              />
+                              <Button size="sm" onClick={() => handleSaveName(s.id)} className="h-8 px-2 bg-success hover:bg-success/90">Salvar</Button>
+                              <Button size="sm" variant="outline" onClick={() => setEditingNameId(null)} className="h-8 px-2">Cancelar</Button>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="font-medium text-card-foreground">{s.full_name}</p>
+                              <Badge variant="secondary" className="font-mono">{s.unique_code}</Badge>
+                            </>
+                          )}
+                        </div>
+                        {s.monthly_fee && editingNameId !== s.id && <p className="text-xs text-muted-foreground">R$ {Number(s.monthly_fee).toFixed(2)}</p>}
                       </div>
                     </div>
                   </td>
                   <td className="p-4 text-sm text-card-foreground">{s.phone}</td>
-                  <td className="p-4 text-sm text-card-foreground">{s.plans?.name || "—"}</td>
                   <td className="p-4">
                     <Badge variant={s.status === "active" ? "default" : "secondary"} className={s.status === "active" ? "bg-success/10 text-success border-success/20" : ""}>
                       {s.status === "active" ? "Ativo" : "Inativo"}
                     </Badge>
                   </td>
-                  <td className="p-4 text-sm text-muted-foreground">
-                    {format(new Date(s.enrollment_date + "T12:00:00"), "dd/MM/yyyy", { locale: ptBR })}
+                  <td className="p-4 text-sm text-muted-foreground min-w-[200px]">
+                    {editingDateId === s.id ? (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="date"
+                          value={newEnrollmentDate}
+                          onChange={(e) => setNewEnrollmentDate(e.target.value)}
+                          className="h-8 w-36"
+                        />
+                        <Button size="sm" onClick={() => handleSaveEnrollmentDate(s.id)} className="h-8 bg-success hover:bg-success/90">Salvar</Button>
+                        <Button size="sm" variant="outline" onClick={() => setEditingDateId(null)} className="h-8">Cancelar</Button>
+                      </div>
+                    ) : (
+                      (s.enrollment_date || s.joined_at) ? format(new Date((s.enrollment_date || s.joined_at) + "T12:00:00"), "dd/MM/yyyy", { locale: ptBR }) : ""
+                    )}
                   </td>
                   <td className="p-4 text-right">
-                    {s.status === "active" && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          if (confirm(`Desativar ${s.full_name}?`)) {
-                            deactivateMutation.mutate(s.id);
-                          }
-                        }}
-                        className="text-overdue hover:text-overdue hover:bg-overdue/10"
-                      >
-                        <UserX className="w-4 h-4 mr-1" />
-                        Desativar
-                      </Button>
-                    )}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="sm" variant="ghost">
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {s.status === "active" && (
+                          <DropdownMenuItem onClick={() => {
+                            if (confirm(`Desativar ${s.full_name}?`)) {
+                              deactivateStudent(s.id);
+                            }
+                          }} className="text-overdue cursor-pointer">
+                            <UserX className="w-4 h-4 mr-2" />
+                            Desativar
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem onClick={() => {
+                          setEditingNameId(s.id);
+                          setNewName(s.full_name || "");
+                        }} className="cursor-pointer">
+                          <Pencil className="w-4 h-4 mr-2" />
+                          Editar Nome
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => {
+                          setEditingDateId(s.id);
+                          setNewEnrollmentDate(s.enrollment_date || s.joined_at || "");
+                        }} className="cursor-pointer">
+                          <Calendar className="w-4 h-4 mr-2" />
+                          Editar Matrícula
+                        </DropdownMenuItem>
+                        {s.status === "inactive" && (
+                          <>
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-muted-foreground cursor-pointer">
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  Ver Senha
+                                </DropdownMenuItem>
+                              </DialogTrigger>
+                              <DialogContent className="bg-card">
+                                <DialogHeader>
+                                  <DialogTitle className="font-heading">Senha de {s.full_name}</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-4 py-4">
+                                  <div>
+                                    <p className="text-sm text-muted-foreground mb-2">Código de Acesso:</p>
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-xl font-bold text-primary font-mono">{s.unique_code}</p>
+                                      <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(s.unique_code); toast({ title: "Código copiado!" }); }}>
+                                        Copiar
+                                      </Button>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-muted-foreground mb-2">Senha:</p>
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-xl font-bold text-primary font-mono">{s.password}</p>
+                                      <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(s.password); toast({ title: "Senha copiada!" }); }}>
+                                        Copiar
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          </>
+                        )}
+                        <DropdownMenuItem onClick={() => deleteStudent(s.id, s.full_name)} className="text-destructive cursor-pointer">
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Deletar Aluno
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </td>
                 </tr>
               ))

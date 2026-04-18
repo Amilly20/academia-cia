@@ -1,5 +1,3 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -8,79 +6,183 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import OverduePaymentsList from "@/OverduePaymentsList";
-import { Plus, Check, MessageCircle } from "lucide-react";
-import { useState } from "react";
+import { Plus, Check, MessageCircle, Edit2, Trash2, Eye, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { getFirebaseData, setFirebaseData, generateStudentPayments, generateAutomaticNotifications } from "@/lib/localStorage";
 
 export default function Billing() {
-  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [editingValues, setEditingValues] = useState<any>({});
   const [form, setForm] = useState({ student_id: "", amount: "", due_date: "" });
+  const [students, setStudents] = useState<any[]>([]);
+  const [allPayments, setAllPayments] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [proofs, setProofs] = useState<any[]>([]);
 
-  const { data: students } = useQuery({
-    queryKey: ["students-active"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("students").select("id, full_name").eq("status", "active").order("full_name");
-      if (error) throw error;
-      return data;
-    },
-  });
+  // Load data from localStorage on mount
+  const fetchData = async () => {
+    setIsLoading(true);
+    let data = await getFirebaseData();
+    
+    const studentsArray = Object.values(data.students || {});
+    const paymentsArray = Object.values(data.payments || {});
 
-  const { data: allPayments, isLoading } = useQuery({
-    queryKey: ["all-payments"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("payments")
-        .select("*, students(full_name)")
-        .order("due_date", { ascending: false })
-        .limit(50);
-      if (error) throw error;
-      return data;
-    },
-  });
+    const updatedPayments = generateStudentPayments(studentsArray, paymentsArray);
+    let needsUpdate = false;
+    if (updatedPayments.length > paymentsArray.length) {
+      data.payments = updatedPayments;
+      needsUpdate = true;
+    }
 
-  const createPayment = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase.from("payments").insert({
-        student_id: form.student_id,
-        amount: parseFloat(form.amount),
-        due_date: form.due_date,
+    if (generateAutomaticNotifications(data)) {
+      needsUpdate = true;
+    }
+    
+    if (needsUpdate) {
+      await setFirebaseData(data);
+    }
+
+    const activeStudents = studentsArray.filter((s: any) => s.status === "active").sort((a: any, b: any) => a.full_name.localeCompare(b.full_name));
+    setStudents(activeStudents);
+
+    const paymentsWithStudents = Object.values(data.payments || {})
+      .filter((p: any) => p.status !== "paid" && p.status !== "archived")
+      .map((payment: any) => {
+        const student = studentsArray.find((s: any) => s.id === payment.student_id);
+        return {
+          ...payment,
+          students: student ? { full_name: student.full_name, phone: student.phone } : null
+        };
+      })
+      .sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+    
+    setAllPayments(paymentsWithStudents);
+    setProofs(Object.values(data.paymentProofs || {}));
+    
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleCreatePayment = async () => {
+    if (!form.student_id || !form.amount || !form.due_date) return;
+    
+    const data = await getFirebaseData();
+    const payments = Object.values(data.payments || {});
+    
+    const newPayment = {
+      id: String(Math.max(0, ...payments.map(p => parseInt(p.id) || 0)) + 1),
+      student_id: form.student_id,
+      amount: form.amount,
+      due_date: form.due_date,
+      status: "pending" as const,
+      paid_date: null,
+    };
+
+    data.payments = [...payments, newPayment];
+    await setFirebaseData(data);
+    
+    toast({ title: "Mensalidade registrada!" });
+    setOpen(false);
+    setForm({ student_id: "", amount: "", due_date: "" });
+    fetchData(); // Refresh all data
+  };
+
+  const handleMarkPaid = async (id: string) => {
+    const data = await getFirebaseData();
+    const payments = Object.values(data.payments || {});
+    const paymentIndex = payments.findIndex((p: any) => p.id === id);
+
+    if (paymentIndex !== -1) {
+      const payment = payments[paymentIndex] as any;
+      payment.status = "paid";
+      payment.paid_date = new Date().toISOString().split("T")[0];
+      
+      // Adicionar notificação automática para o aluno
+      let notifications = Object.values(data.notifications || {});
+      const amount = Number(payment.amount).toFixed(2).replace(".", ",");
+      const dueDate = format(new Date(payment.due_date + "T12:00:00"), "dd/MM/yyyy", { locale: ptBR });
+      
+      // Limpar avisos antigos de cobrança para não confundir o aluno
+      notifications = notifications.filter((n: any) => 
+        !(n.student_id === payment.student_id && (n.title === "Lembrete de Cobrança" || n.title === "Cobrança de Mensalidade"))
+      );
+
+      notifications.push({
+        id: Date.now().toString(),
+        student_id: payment.student_id,
+        title: "Pagamento Confirmado! ✅",
+        description: `Seu pagamento de R$ ${amount} referente ao vencimento ${dueDate} foi aprovado pelo gestor.`,
+        created_at: new Date().toISOString()
       });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["all-payments"] });
-      queryClient.invalidateQueries({ queryKey: ["overdue-payments"] });
-      toast({ title: "Mensalidade registrada!" });
-      setOpen(false);
-      setForm({ student_id: "", amount: "", due_date: "" });
-    },
-  });
+      data.notifications = notifications;
 
-  const markPaid = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("payments").update({ status: "paid" as const, paid_date: new Date().toISOString().split("T")[0] }).eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["all-payments"] });
-      queryClient.invalidateQueries({ queryKey: ["overdue-payments"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      // Remover o comprovante se existir
+      data.paymentProofs = Object.values(data.paymentProofs || {}).filter((pr: any) => pr.paymentId !== id);
+
+      await setFirebaseData(data);
       toast({ title: "Pagamento confirmado!" });
-    },
-  });
+      fetchData(); // Refresh all data
+    }
+  };
 
-  const handleSendWhatsApp = (payment: any) => {
-    const phone = payment.students?.phone?.replace(/\D/g, "");
-    if (!phone) return alert("O aluno não tem telefone cadastrado.");
+  const handleDeletePayment = async (id: string) => {
+    if (confirm("Tem certeza que deseja deletar esta mensalidade?")) {
+      const data = await getFirebaseData();
+      data.payments = Object.values(data.payments || {}).filter((p: any) => p.id !== id);
+      await setFirebaseData(data);
+      toast({ title: "Mensalidade deletada" });
+      fetchData();
+    }
+  };
 
+  const handleEditPayment = (payment: any) => {
+    setEditingPaymentId(payment.id);
+    setEditingValues({
+      amount: payment.amount,
+      due_date: payment.due_date,
+    });
+  };
+
+  const handleSaveEdit = async (paymentId: string) => {
+    const data = await getFirebaseData();
+    const payments = Object.values(data.payments || {});
+    const paymentIndex = payments.findIndex((p: any) => p.id === paymentId);
+    if (paymentIndex !== -1) {
+      (payments[paymentIndex] as any).amount = editingValues.amount;
+      (payments[paymentIndex] as any).due_date = editingValues.due_date;
+      await setFirebaseData(data);
+      setEditingPaymentId(null);
+      toast({ title: "Mensalidade atualizada!" });
+      fetchData();
+    }
+  };
+
+  const handleSendSystemNotification = async (payment: any) => {
     const amount = Number(payment.amount).toFixed(2).replace(".", ",");
-    const pixKey = "12.345.678/0001-90"; // TODO: Substitua por sua chave PIX real depois
-    const message = `Olá ${payment.students?.full_name}, tudo bem? 🏋️‍♂️\n\nAqui é da Cia fitness! Sua mensalidade no valor de R$ ${amount} com vencimento para ${format(new Date(payment.due_date + "T12:00:00"), "dd/MM/yyyy", { locale: ptBR })} já está disponível no sistema.\n\nPara facilitar, você pode pagar via PIX (Copia e Cola) usando a chave abaixo:\n\n*${pixKey}*\n\nQualquer dúvida, estamos à disposição!`;
+    const dueDate = format(new Date(payment.due_date + "T12:00:00"), "dd/MM/yyyy", { locale: ptBR });
+    
+    const data = await getFirebaseData();
+    const notifications = Object.values(data.notifications || {});
+    
+    const newNotification = {
+      id: Date.now().toString(),
+      student_id: payment.student_id,
+      payment_id: payment.id,
+      title: "Lembrete de Cobrança",
+      description: `Sua mensalidade no valor de R$ ${amount} vence em ${dueDate}. Verifique a aba de Mensalidades para fazer o pagamento.`,
+      created_at: new Date().toISOString()
+    };
 
-    const whatsappUrl = `https://wa.me/55${phone}?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, "_blank");
+    notifications.push(newNotification);
+    data.notifications = notifications;
+    await setFirebaseData(data);
+    toast({ title: "Aluno notificado!", description: "A notificação foi enviada para a área do aluno." });
   };
 
   const statusLabel: Record<string, string> = { pending: "Pendente", paid: "Pago", overdue: "Vencido" };
@@ -89,6 +191,10 @@ export default function Billing() {
     paid: "bg-success/10 text-success border-success/20",
     overdue: "bg-overdue/10 text-overdue border-overdue/20",
   };
+
+  if (isLoading) {
+    return <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
+  }
 
   return (
     <div className="space-y-8">
@@ -124,7 +230,7 @@ export default function Billing() {
                 <Input type="date" value={form.due_date} onChange={(e) => setForm((f) => ({ ...f, due_date: e.target.value }))} />
               </div>
               <Button
-                onClick={() => createPayment.mutate()}
+                onClick={() => handleCreatePayment()}
                 disabled={!form.student_id || !form.amount || !form.due_date}
                 className="w-full gradient-primary text-primary-foreground border-0"
               >
@@ -139,7 +245,7 @@ export default function Billing() {
 
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="p-6 border-b border-border">
-          <h3 className="font-heading font-semibold text-card-foreground">Todas as Mensalidades</h3>
+          <h3 className="font-heading font-semibold text-card-foreground">Mensalidades Pendentes</h3>
         </div>
         <table className="w-full">
           <thead>
@@ -155,30 +261,97 @@ export default function Billing() {
             {isLoading ? (
               <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">Carregando...</td></tr>
             ) : (
-              allPayments?.map((p) => (
+              allPayments?.map((p) => {
+                const proof = proofs.find((pr: any) => pr.paymentId === p.id);
+                return (
                 <tr key={p.id} className="hover:bg-muted/30 transition-colors">
-                  <td className="p-4 font-medium text-card-foreground">{p.students?.full_name || "—"}</td>
-                  <td className="p-4 text-sm text-card-foreground">R$ {Number(p.amount).toFixed(2)}</td>
+                  <td className="p-4 font-medium text-card-foreground">{p.students?.full_name || "Aluno Desconhecido"}</td>
+                  <td className="p-4 text-sm text-card-foreground">
+                    {editingPaymentId === p.id ? (
+                      <Input 
+                        type="number" 
+                        step="0.01"
+                        value={editingValues.amount}
+                        onChange={(e) => setEditingValues({...editingValues, amount: e.target.value})}
+                        className="w-32"
+                      />
+                    ) : (
+                      `R$ ${Number(p.amount).toFixed(2)}`
+                    )}
+                  </td>
                   <td className="p-4 text-sm text-muted-foreground">
-                    {format(new Date(p.due_date + "T12:00:00"), "dd/MM/yyyy", { locale: ptBR })}
+                    {editingPaymentId === p.id ? (
+                      <Input 
+                        type="date"
+                        value={editingValues.due_date}
+                        onChange={(e) => setEditingValues({...editingValues, due_date: e.target.value})}
+                        className="w-40"
+                      />
+                    ) : (
+                      format(new Date(p.due_date + "T12:00:00"), "dd/MM/yyyy", { locale: ptBR })
+                    )}
                   </td>
                   <td className="p-4">
                     <Badge className={statusClass[p.status]}>{statusLabel[p.status]}</Badge>
                   </td>
                   <td className="p-4 text-right flex justify-end gap-2">
-                    {p.status !== "paid" && (
+                    {editingPaymentId === p.id ? (
                       <>
-                        <Button size="sm" variant="outline" onClick={() => handleSendWhatsApp(p)} className="text-primary hover:text-primary border-primary hover:bg-primary/10">
-                          <MessageCircle className="w-4 h-4 mr-1" /> Cobrar
+                        <Button size="sm" variant="outline" onClick={() => handleSaveEdit(p.id)} className="text-success hover:text-success">
+                          Salvar
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => markPaid.mutate(p.id)} className="text-success hover:text-success hover:bg-success/10">
-                          <Check className="w-4 h-4 mr-1" /> Confirmar
+                        <Button size="sm" variant="outline" onClick={() => setEditingPaymentId(null)}>
+                          Cancelar
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                    {proof && (
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button size="sm" variant="outline" className="text-blue-500 hover:text-blue-600 border-blue-200 hover:bg-blue-500/10">
+                            <Eye className="w-4 h-4 mr-1" /> Comprovante
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-md">
+                          <DialogHeader><DialogTitle>Comprovante - {p.students?.full_name || "Aluno"}</DialogTitle></DialogHeader>
+                          <div className="mt-4 flex flex-col items-center gap-4">
+                            {proof.fileData?.startsWith("data:application/pdf") ? (
+                              <iframe src={proof.fileData} className="w-full h-96 border rounded" />
+                            ) : (
+                              <img src={proof.fileData} alt="Comprovante" className="max-w-full max-h-96 object-contain rounded" />
+                            )}
+                            {p.status !== "paid" && (
+                              <Button onClick={() => handleMarkPaid(p.id)} className="w-full bg-success hover:bg-success/90 text-white">
+                                Aprovar Pagamento
+                              </Button>
+                            )}
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    )}
+                        {p.status !== "paid" && (
+                          <>
+                            <Button size="sm" variant="ghost" onClick={() => handleSendSystemNotification(p)} className="text-blue-500 hover:text-blue-600 hover:bg-blue-500/10">
+                              <MessageCircle className="w-4 h-4 mr-1" /> Notificar
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => handleEditPayment(p)} className="text-primary hover:text-primary hover:bg-primary/10">
+                              <Edit2 className="w-4 h-4 mr-1" /> Editar
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => handleMarkPaid(p.id)} className="text-success hover:text-success hover:bg-success/10">
+                              <Check className="w-4 h-4 mr-1" /> Confirmar
+                            </Button>
+                          </>
+                        )}
+                        <Button size="sm" variant="ghost" onClick={() => handleDeletePayment(p.id)} className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                          <Trash2 className="w-4 h-4 mr-1" /> Deletar
                         </Button>
                       </>
                     )}
                   </td>
                 </tr>
-              ))
+            );
+          })
             )}
           </tbody>
         </table>

@@ -1,44 +1,71 @@
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/client";
+import { useState, useEffect } from "react";
 import StatsCard from "@/StatsCard";
 import BirthdayList from "@/BirthdayList";
 import OverduePaymentsList from "@/OverduePaymentsList";
-import { Users, AlertTriangle, TrendingUp, Megaphone, PackageSearch } from "lucide-react";
+import { Users, AlertTriangle, TrendingUp, Megaphone, PackageSearch, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { getFirebaseData, setFirebaseData, generateStudentPayments, generateAutomaticNotifications } from "@/lib/localStorage";
 
 export default function Dashboard() {
-  const { data: stats } = useQuery({
-    queryKey: ["dashboard-stats"],
-    queryFn: async () => {
-      const [studentsRes, overdueRes, paidRes] = await Promise.all([
-        supabase.from("students").select("id", { count: "exact" }).eq("status", "active"),
-        supabase.from("payments").select("id", { count: "exact" }).in("status", ["pending", "overdue"]).lte("due_date", new Date().toISOString().split("T")[0]),
-        supabase.from("payments").select("amount").eq("status", "paid"),
-      ]);
-      const totalRevenue = (paidRes.data || []).reduce((sum, p) => sum + Number(p.amount), 0);
-      return {
-        activeStudents: studentsRes.count || 0,
-        overduePayments: overdueRes.count || 0,
+  const [stats, setStats] = useState<{
+    activeStudents: number;
+    overduePayments: number;
+    totalRevenue: number;
+  } | null>(null);
+  const [recentEvents, setRecentEvents] = useState<any[]>([]);
+  const [recentLost, setRecentLost] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      let data = await getFirebaseData();
+      
+      const studentsArray = Object.values(data.students || {});
+      const paymentsArray = Object.values(data.payments || {});
+
+      // Generate automatic payments for active students and update if needed
+      const updatedPayments = generateStudentPayments(studentsArray, paymentsArray);
+      let needsUpdate = false;
+      if (updatedPayments.length > paymentsArray.length) {
+        data.payments = updatedPayments;
+        needsUpdate = true;
+      }
+      
+      if (generateAutomaticNotifications(data)) {
+        needsUpdate = true;
+      }
+      
+      if (needsUpdate) {
+        await setFirebaseData(data);
+      }
+      
+      const activeStudents = studentsArray.filter((s: any) => s.status === "active").length;
+      const today = new Date().toISOString().split("T")[0];
+      const overduePayments = paymentsArray.filter(
+        (p: any) => (p.status === "pending" || p.status === "overdue") && p.due_date <= today
+      ).length;
+      const totalRevenue = paymentsArray
+        .filter((p: any) => p.status === "paid")
+        .reduce((sum, p: any) => sum + Number(p.amount), 0);
+
+      setStats({
+        activeStudents,
+        overduePayments,
         totalRevenue,
-      };
-    },
-  });
+      });
 
-  const { data: recentEvents } = useQuery({
-    queryKey: ["recent-events-dashboard"],
-    queryFn: async () => {
-      const { data } = await supabase.from("commemorative_dates").select("*").neq("title", "SYSTEM_LOGO").gte("event_date", new Date().toISOString().split("T")[0]).order("event_date").limit(2);
-      return data || [];
-    }
-  });
+      setRecentEvents(Object.values(data.events || {}).slice(0, 2));
+      setRecentLost(Object.values(data.lostAndFound || {}).slice(0, 2));
+      setIsLoading(false);
+    };
 
-  const { data: recentLost } = useQuery({
-    queryKey: ["recent-lost-dashboard"],
-    queryFn: async () => {
-      const { data } = await supabase.from("lost_and_found").select("*").eq("claimed", false).order("created_at", { ascending: false }).limit(2);
-      return data || [];
-    }
-  });
+    fetchData();
+  }, []);
+
+  if (isLoading) {
+    return <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
+  }
 
   return (
     <div className="space-y-8">

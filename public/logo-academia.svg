@@ -1,0 +1,22 @@
+<svg viewBox="0 0 768 768" xmlns="http://www.w3.org/2000/svg" width="200" height="200">
+  <!-- Background -->
+  <rect width="768" height="768" fill="black"/>
+  
+  <!-- Top Kettlebell Arc -->
+  <path d="M 235 128 Q 235 80 280 80 Q 325 80 370 128 L 330 180 Q 305 150 280 150 Q 255 150 235 180 Z" fill="#FF8C00"/>
+  <path d="M 398 128 Q 443 80 488 80 Q 533 80 533 128 L 513 180 Q 493 150 468 150 Q 443 150 398 180 Z" fill="#FF8C00"/>
+  
+  <!-- Handle Top Arc -->
+  <path d="M 235 180 Q 200 220 200 280 Q 200 340 235 380 L 310 350 Q 290 320 290 280 Q 290 240 310 210 Z" fill="#FF8C00"/>
+  <path d="M 533 180 Q 568 220 568 280 Q 568 340 533 380 L 458 350 Q 478 320 478 280 Q 478 240 458 210 Z" fill="#FF8C00"/>
+  
+  <!-- Horizontal Bars -->
+  <rect x="120" y="340" width="528" height="30" fill="#FF8C00" rx="5"/>
+  <rect x="130" y="470" width="508" height="20" fill="#FF8C00" rx="5"/>
+  
+  <!-- Text: CIA FITNESS -->
+  <text x="384" y="440" font-family="Arial, sans-serif" font-size="72" font-weight="bold" fill="white" text-anchor="middle" letter-spacing="2">CIA FITNESS</text>
+  
+  <!-- Text: ACADEMIA -->
+  <text x="384" y="520" font-family="Arial, sans-serif" font-size="40" font-weight="300" fill="white" text-anchor="middle" letter-spacing="4">ACADEMIA</text>
+</svg>

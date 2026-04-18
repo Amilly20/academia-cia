@@ -1,37 +1,47 @@
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Dumbbell, ShieldCheck, User, UserPlus } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/client";
+import { Dumbbell, ShieldCheck, User, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
+import { verifyAdminCode } from "@/lib/localStorage";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 export default function Landing() {
   const navigate = useNavigate();
-  const [showAdminAuth, setShowAdminAuth] = useState(false);
   const [adminCode, setAdminCode] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  const { data: logoData } = useQuery({
-    queryKey: ["system-logo"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("commemorative_dates")
-        .select("image_url")
-        .eq("title", "SYSTEM_LOGO")
-        .limit(1)
-        .maybeSingle();
-      return data;
-    },
-  });
+  const handleAdminLogin = async () => {
+    if (!adminCode) {
+      toast({ title: "Digite um código", variant: "destructive" });
+      return;
+    }
 
-  const handleAdminLogin = () => {
-    if (!adminCode) return toast({ title: "Digite um código", variant: "destructive" });
-    
-    if (adminCode === "497778960517") {
-      navigate("/dashboard");
-    } else {
-      toast({ title: "Código incorreto!", variant: "destructive" });
+    setIsLoggingIn(true);
+    try {
+      if (verifyAdminCode(adminCode)) {
+        navigate("/dashboard");
+      } else {
+        toast({ title: "Código incorreto!", variant: "destructive" });
+      }
+    } catch (error) {
+      toast({
+        title: "Erro ao fazer login",
+        description: "Ocorreu um problema ao tentar verificar o código.",
+        variant: "destructive",
+      });
+      console.error("Admin login error:", error);
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -39,13 +49,9 @@ export default function Landing() {
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
       <div className="text-center mb-10">
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-4">
-          {logoData?.image_url ? (
-            <img src={logoData.image_url} alt="Logo" className="w-20 h-20 object-cover rounded-full shadow-sm" />
-          ) : (
-            <div className="bg-primary/10 w-20 h-20 rounded-full flex items-center justify-center">
-              <Dumbbell className="w-10 h-10 text-primary" />
-            </div>
-          )}
+          <div className="bg-primary/10 w-20 h-20 rounded-full flex items-center justify-center">
+            <Dumbbell className="w-10 h-10 text-primary" />
+          </div>
           <h1 className="text-4xl md:text-5xl font-heading font-bold text-foreground">
             Cia fitness
           </h1>
@@ -64,12 +70,7 @@ export default function Landing() {
           <div className="space-y-3">
             <Link to="/student-area">
               <Button variant="outline" className="w-full border-primary text-primary hover:bg-primary/10 gap-2">
-                Já tenho conta
-              </Button>
-            </Link>
-            <Link to="/cadastro">
-              <Button className="w-full gradient-primary text-primary-foreground border-0 gap-2">
-                <UserPlus className="w-4 h-4" /> Quero me matricular
+               Entrar como Aluno
               </Button>
             </Link>
           </div>
@@ -80,21 +81,43 @@ export default function Landing() {
           <ShieldCheck className="w-12 h-12 text-primary mx-auto mb-4" />
           <h2 className="text-2xl font-bold font-heading mb-2">Sou Gestor</h2>
           <p className="text-muted-foreground mb-6">Acesse o painel de controle administrativo para gerenciar a academia.</p>
-          
-          {!showAdminAuth ? (
-            <Button onClick={() => setShowAdminAuth(true)} className="w-full gradient-primary text-primary-foreground border-0 gap-2 mt-[52px]">
-              Entrar como Admin
-            </Button>
-          ) : (
-            <div className="space-y-3 mt-[14px]">
-              <p className="text-sm font-medium text-left">Digite seu código de administrador:</p>
-              <div className="flex gap-2">
-                <Input type="password" placeholder="Ex: 1234" value={adminCode} onChange={(e) => setAdminCode(e.target.value)} />
-                <Button onClick={handleAdminLogin} className="gradient-primary border-0">Entrar</Button>
+
+          <Dialog onOpenChange={(open) => !open && setAdminCode("")}>
+            <DialogTrigger asChild>
+              <Button className="w-full gradient-primary text-primary-foreground border-0 gap-2 mt-[52px]">
+                Entrar como Admin
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Acesso Restrito</DialogTitle>
+                <DialogDescription>
+                  Digite seu código de administrador para acessar o painel.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="admin-code" className="text-left font-medium">
+                    Código de Administrador
+                  </label>
+                  <Input
+                    id="admin-code"
+                    type="password"
+                    placeholder="••••••••"
+                    value={adminCode}
+                    onChange={(e) => setAdminCode(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && !isLoggingIn && handleAdminLogin()}
+                  />
+                </div>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => setShowAdminAuth(false)} className="w-full text-muted-foreground">Cancelar</Button>
-            </div>
-          )}
+              <DialogFooter>
+                <Button onClick={handleAdminLogin} disabled={isLoggingIn} className="w-full">
+                  {isLoggingIn && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Entrar
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     </div>

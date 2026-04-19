@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import StudentFormDialog from "@/StudentFormDialog";
 import { toast } from "@/hooks/use-toast";
-import { UserX, Search, Trash2, Eye, MoreVertical, Loader2, Calendar, Pencil } from "lucide-react";
+import { UserX, Search, Trash2, Eye, MoreVertical, Loader2, Calendar, Pencil, MessageCircle, Send } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getFirebaseData, setFirebaseData } from "@/lib/localStorage";
@@ -24,6 +24,10 @@ export default function Students() {
   const [newEnrollmentDate, setNewEnrollmentDate] = useState("");
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatStudent, setChatStudent] = useState<any>(null);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [newMessage, setNewMessage] = useState("");
 
   const fetchData = async () => {
     const data = await getFirebaseData();
@@ -94,6 +98,37 @@ export default function Students() {
     setStudents(updatedStudents);
     toast({ title: "Nome atualizado!" });
     setEditingNameId(null);
+  };
+
+  const openChat = async (student: any) => {
+    setChatStudent(student);
+    const data = await getFirebaseData();
+    const messages = (data.messages || []).filter((m: any) => m.student_id === student.id).sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    setChatMessages(messages);
+    setChatOpen(true);
+  };
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !chatStudent) return;
+    try {
+      const data = await getFirebaseData();
+      const messages = data.messages || [];
+      const newMsg = {
+        id: String(Date.now()),
+        student_id: chatStudent.id,
+        sender: 'admin',
+        text: newMessage,
+        created_at: new Date().toISOString(),
+      };
+      messages.push(newMsg);
+      data.messages = messages;
+      await setFirebaseData(data);
+      setChatMessages(prev => [...prev, newMsg]);
+      setNewMessage("");
+    } catch (error) {
+      toast({ title: "Erro ao enviar mensagem", variant: "destructive" });
+    }
   };
 
   const filtered = students?.filter((s) =>
@@ -227,6 +262,10 @@ export default function Students() {
                           <Calendar className="w-4 h-4 mr-2" />
                           Editar Matrícula
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openChat(s)} className="cursor-pointer text-primary">
+                          <MessageCircle className="w-4 h-4 mr-2" />
+                          Chat com Aluno
+                        </DropdownMenuItem>
                         {s.status === "inactive" && (
                           <>
                             <Dialog>
@@ -277,6 +316,40 @@ export default function Students() {
           </tbody>
         </table>
       </div>
+      <Dialog open={chatOpen} onOpenChange={setChatOpen}>
+        <DialogContent className="sm:max-w-[425px] h-[500px] flex flex-col bg-card">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Chat com {chatStudent?.full_name}</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto space-y-4 p-2 pr-4 mt-4">
+            {chatMessages.length === 0 ? (
+              <p className="text-center text-sm text-muted-foreground mt-10">Nenhuma mensagem ainda.</p>
+            ) : (
+              chatMessages.map(msg => (
+                <div key={msg.id} className={`flex ${msg.sender === 'admin' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[85%] rounded-lg p-3 ${msg.sender === 'admin' ? 'bg-primary text-primary-foreground rounded-br-none' : 'bg-muted rounded-bl-none'}`}>
+                    <p className="text-sm">{msg.text}</p>
+                    <p className="text-[10px] opacity-70 mt-1 text-right">
+                      {format(new Date(msg.created_at), "HH:mm")}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          <form onSubmit={handleSendMessage} className="flex gap-2 pt-4 border-t border-border mt-auto">
+            <Input 
+              value={newMessage} 
+              onChange={e => setNewMessage(e.target.value)} 
+              placeholder="Digite sua mensagem..." 
+              className="flex-1"
+            />
+            <Button type="submit" disabled={!newMessage.trim()} size="icon" className="shrink-0">
+              <Send className="w-4 h-4" />
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

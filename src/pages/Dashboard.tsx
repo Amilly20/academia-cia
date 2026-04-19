@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import StatsCard from "@/StatsCard";
 import BirthdayList from "@/BirthdayList";
 import OverduePaymentsList from "@/OverduePaymentsList";
-import { Users, AlertTriangle, TrendingUp, Megaphone, PackageSearch, Loader2 } from "lucide-react";
+import { Users, AlertTriangle, TrendingUp, Megaphone, PackageSearch, Loader2, MessageCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getFirebaseData, setFirebaseData, generateStudentPayments, generateAutomaticNotifications } from "@/lib/localStorage";
 
@@ -14,6 +14,7 @@ export default function Dashboard() {
   } | null>(null);
   const [recentEvents, setRecentEvents] = useState<any[]>([]);
   const [recentLost, setRecentLost] = useState<any[]>([]);
+  const [recentMessages, setRecentMessages] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -57,6 +58,21 @@ export default function Dashboard() {
 
       setRecentEvents(Object.values(data.events || {}).slice(0, 2));
       setRecentLost(Object.values(data.lostAndFound || {}).slice(0, 2));
+      
+      const messages = Object.values(data.messages || {}).filter((m: any) => m.sender === 'student').sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      const uniqueRecent: any[] = [];
+      const seen = new Set();
+      for (const msg of messages) {
+         if (!seen.has((msg as any).student_id)) {
+             seen.add((msg as any).student_id);
+             uniqueRecent.push(msg);
+         }
+      }
+      setRecentMessages(uniqueRecent.slice(0, 3).map((m: any) => {
+         const student = studentsArray.find((s: any) => s.id === m.student_id);
+         return { ...m, studentName: student?.full_name || 'Aluno' };
+      }));
+
       setIsLoading(false);
     };
 
@@ -137,6 +153,28 @@ export default function Dashboard() {
                   ))}
                 </ul>
               ) : <p className="text-sm text-muted-foreground">Nenhum item pendente.</p>}
+            </div>
+
+            <div className="rounded-xl border border-border bg-card p-6 md:col-span-2">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-heading font-semibold text-card-foreground flex items-center gap-2">
+                  <MessageCircle className="w-5 h-5 text-blue-500" /> Mensagens Recentes
+                </h3>
+                <Link to="/students" className="text-xs text-primary hover:underline">Ver Alunos</Link>
+              </div>
+              {recentMessages?.length ? (
+                <ul className="space-y-3">
+                  {recentMessages.map(msg => (
+                    <li key={msg.id} className="text-sm border-b border-border pb-2 last:border-0 last:pb-0">
+                      <div className="flex justify-between items-start mb-1">
+                        <p className="font-medium text-card-foreground">{msg.studentName}</p>
+                        <span className="text-[10px] text-muted-foreground">{new Date(msg.created_at).toLocaleDateString('pt-BR')}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">{msg.text}</p>
+                    </li>
+                  ))}
+                </ul>
+              ) : <p className="text-sm text-muted-foreground">Nenhuma mensagem recente.</p>}
             </div>
           </div>
         </div>

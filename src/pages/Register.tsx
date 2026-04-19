@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import { localData, setLocalStorage, getLocalStorage } from "@/lib/localStorage";
+import { localData, getFirebaseData, setFirebaseData } from "@/lib/localStorage";
 
 const generateUniqueCode = (length = 8) => {
   const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -42,7 +42,8 @@ export default function Register() {
         throw new Error("Preencha todos os campos obrigatórios");
       }
 
-      const students = getLocalStorage("students") || localData.students;
+      const data = await getFirebaseData();
+      const students = Object.values(data.students || {});
 
       // Check if email already exists
       if (students.some((s: any) => s.email === form.email)) {
@@ -62,16 +63,17 @@ export default function Register() {
         joined_at: new Date().toISOString().split('T')[0],
       };
 
-      students.push(newStudent);
-      setLocalStorage("students", students);
+      const newStudentsArray = [...students, newStudent];
+      data.students = newStudentsArray;
+      await setFirebaseData(data);
 
       setGeneratedCode(uniqueCode);
       toast({ title: "Cadastro realizado com sucesso!", description: "Seu código de acesso foi gerado." });
       
-      // Redirect to student area after 2 seconds
+      // Redireciona para a área do aluno mais rapidamente
       setTimeout(() => {
         navigate("/student-area", { state: { studentId: newStudent.id, studentData: newStudent } });
-      }, 2000);
+      }, 500);
     } catch (error: any) {
       toast({ title: "Erro no cadastro", description: error.message, variant: "destructive" });
     } finally {

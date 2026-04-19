@@ -30,6 +30,9 @@ export default function Settings() {
       const data = await getFirebaseData();
       const settings = data.settings || {};
       setPixKey((settings.PIX_KEY && settings.PIX_KEY !== "12.345.678/0001-90") ? settings.PIX_KEY : "00074814540");
+      if (settings.logoUrl) {
+        setLogoUrl(settings.logoUrl);
+      }
     };
     fetchData();
   }, []);
@@ -43,6 +46,15 @@ export default function Settings() {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleSaveLogo = async () => {
+    const data = await getFirebaseData();
+    if (!data.settings) data.settings = {};
+    data.settings.logoUrl = logoUrl;
+    await setFirebaseData(data);
+    
+    toast({ title: "Logo salva!", description: "A logo da academia foi atualizada com sucesso." });
   };
 
   const handleSavePix = async () => {

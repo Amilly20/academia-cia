@@ -34,38 +34,48 @@ const generatePassword = (length = 12) => {
   return password.split('').sort(() => Math.random() - 0.5).join('');
 };
 
+// Cache em memória para eliminar o tempo de carregamento entre as telas
+let cachedData: any = null;
+let fetchPromise: Promise<any> | null = null;
+
 /**
  * Fetches the entire database from Firebase.
  * If the database is empty, it seeds it with the initial `localData` structure.
  */
 export const getFirebaseData = async (): Promise<typeof localData> => {
-  try {
-    const response = await fetch(`${FIREBASE_URL}/.json`);
-    if (!response.ok) {
-      throw new Error(`Firebase fetch failed: ${response.statusText}`);
-    }
-    let data = await response.json();
-
-    // If the database is empty (returns null), seed it with default data.
-    if (!data) {
-      console.log("Firebase is empty, seeding with initial data...");
-      await setFirebaseData(localData);
-      return localData;
-    }
-
-    // Ensure all top-level keys from localData exist to avoid errors on new features
-    for (const key in localData) {
-      if (!data.hasOwnProperty(key)) {
-        data[key] = localData[key];
-      }
-    }
-
-    return data;
-  } catch (error) {
-    console.error("Failed to get initial data from Firebase:", error);
-    // Fallback to localData if Firebase is unreachable
-    return localData;
+  if (cachedData) return JSON.parse(JSON.stringify(cachedData));
+  if (fetchPromise) {
+    const data = await fetchPromise;
+    return JSON.parse(JSON.stringify(data));
   }
+
+  fetchPromise = (async () => {
+    try {
+      const response = await fetch(`${FIREBASE_URL}/.json`);
+      if (!response.ok) throw new Error(`Firebase fetch failed: ${response.statusText}`);
+      let data = await response.json();
+      
+      if (!data) {
+        console.log("Firebase is empty, seeding with initial data...");
+        await setFirebaseData(localData);
+        data = localData;
+      } else {
+        for (const key in localData) {
+          if (!data.hasOwnProperty(key)) data[key] = (localData as any)[key];
+        }
+      }
+      cachedData = data;
+      return data;
+    } catch (error) {
+      console.error("Failed to get initial data from Firebase:", error);
+      return localData;
+    } finally {
+      fetchPromise = null;
+    }
+  })();
+
+  const finalData = await fetchPromise;
+  return JSON.parse(JSON.stringify(finalData));
 };
 
 /**
@@ -74,6 +84,9 @@ export const getFirebaseData = async (): Promise<typeof localData> => {
  */
 export const setFirebaseData = async (data: unknown) => {
   try {
+    // Atualiza o cache local imediatamente (Optimistic UI)
+    cachedData = JSON.parse(JSON.stringify(data));
+
     const response = await fetch(`${FIREBASE_URL}/.json`, {
       method: 'PUT',
       body: JSON.stringify(data),

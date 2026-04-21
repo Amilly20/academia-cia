@@ -134,7 +134,7 @@ export default function Students() {
   const filtered = students?.filter((s) =>
     (s.full_name || "").toLowerCase().includes(search.toLowerCase()) ||
     (s.phone || "").includes(search)
-  );
+  ).sort((a: any, b: any) => (a.full_name || "").localeCompare(b.full_name || ""));
   
   if (isLoading) {
     return <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;

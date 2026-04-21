@@ -123,6 +123,63 @@ export default function StudentArea() {
     toast({ title: "Notificação excluída" });
   };
 
+  const handlePaymentSubmission = async (p: any, proofObj: any) => {
+    const data = await getFirebaseData();
+    
+    // Salva o comprovante (caso o gestor queira consultar no futuro)
+    const proofs = data.paymentProofs || [];
+    proofs.push(proofObj);
+    data.paymentProofs = proofs;
+
+    if (!proofObj.isCash) {
+      // Dá a baixa automática na mensalidade se enviou comprovante
+      const payments = Object.values(data.payments || {});
+      const paymentIndex = payments.findIndex((pay: any) => pay.id === p.id);
+      
+      if (paymentIndex !== -1) {
+        const payment = payments[paymentIndex] as any;
+        payment.status = "paid";
+        payment.paid_date = new Date().toISOString().split("T")[0];
+
+        // Envia a notificação de sucesso pro aluno
+        let notifications = Object.values(data.notifications || {});
+        const amount = Number(payment.amount).toFixed(2).replace(".", ",");
+        const dueDate = format(new Date(payment.due_date + "T12:00:00"), "dd/MM/yyyy", { locale: ptBR });
+        
+        notifications = notifications.filter((n: any) => 
+          !(n.student_id === payment.student_id && (n.title === "Lembrete de Cobrança" || n.title === "Cobrança de Mensalidade"))
+        );
+
+        notifications.push({
+          id: Date.now().toString(),
+          student_id: payment.student_id,
+          title: "Pagamento Confirmado! ✅",
+          description: `Seu pagamento de R$ ${amount} referente ao vencimento ${dueDate} foi baixado com sucesso no sistema.`,
+          created_at: new Date().toISOString()
+        });
+        data.notifications = notifications;
+      }
+
+      await setFirebaseData(data);
+      setPaymentProofs(proofs);
+      setMyPayments(prev => prev.filter((pay: any) => pay.id !== p.id));
+      
+      toast({ 
+        title: "Pagamento Confirmado!", 
+        description: "Sua mensalidade foi baixada automaticamente pelo sistema."
+      });
+    } else {
+      // Se for dinheiro, só salva o aviso e espera aprovação manual
+      await setFirebaseData(data);
+      setPaymentProofs(proofs);
+      
+      toast({ 
+        title: "Aviso Enviado!", 
+        description: "O gestor foi notificado e dará a baixa na sua mensalidade."
+      });
+    }
+  };
+
   const handleProfilePictureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -483,17 +540,7 @@ export default function StudentArea() {
                                         fileData: reader.result,
                                         uploadedAt: new Date().toISOString(),
                                       };
-                                      
-                                      getFirebaseData().then(data => {
-                                        const proofs = data.paymentProofs || [];
-                                        proofs.push(proof);
-                                        data.paymentProofs = proofs;
-                                        setFirebaseData(data).then(() => setPaymentProofs(proofs));
-                                      });
-                                      toast({ 
-                                        title: "Comprovante enviado!", 
-                                        description: "Seu comprovante foi registrado. O gestor analisará em breve."
-                                      });
+                                      handlePaymentSubmission(p, proof);
                                     };
                                     reader.readAsDataURL(file);
                                   }
@@ -524,17 +571,7 @@ export default function StudentArea() {
                                     isCash: true,
                                     uploadedAt: new Date().toISOString(),
                                   };
-                                  
-                                  getFirebaseData().then(data => {
-                                    const proofs = data.paymentProofs || [];
-                                    proofs.push(proof);
-                                    data.paymentProofs = proofs;
-                                    setFirebaseData(data).then(() => setPaymentProofs(proofs));
-                                  });
-                                  toast({ 
-                                    title: "Aviso enviado!", 
-                                    description: "O gestor foi notificado que você pagou em dinheiro."
-                                  });
+                                  handlePaymentSubmission(p, proof);
                                 }}
                               >
                                 <Wallet className="w-4 h-4" /> Informar pagamento em dinheiro
@@ -543,7 +580,7 @@ export default function StudentArea() {
 
                             <div className="bg-info/5 p-4 rounded-lg border border-info/20 mt-2">
                               <p className="text-xs text-muted-foreground">
-                                ℹ️ Após informar ou enviar o comprovante, o gestor da academia irá validar em breve.
+                                ℹ️ Ao enviar o comprovante a mensalidade será baixada automaticamente. Pagamentos em dinheiro aguardarão aprovação.
                               </p>
                             </div>
                           </div>

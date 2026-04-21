@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import OverduePaymentsList from "@/OverduePaymentsList";
-import { Plus, Check, MessageCircle, Edit2, Trash2, Eye, Loader2, Wallet } from "lucide-react";
+import { Plus, Check, MessageCircle, Edit2, Trash2, Eye, EyeOff, Loader2, Wallet, Search } from "lucide-react";
 import { useState, useEffect } from "react";
 import { format, addDays, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -19,6 +19,7 @@ export default function Billing() {
   const [form, setForm] = useState({ student_id: "", amount: "", due_date: "" });
   const [students, setStudents] = useState<any[]>([]);
   const [showAll, setShowAll] = useState(false);
+  const [search, setSearch] = useState("");
   const [allPayments, setAllPayments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [proofs, setProofs] = useState<any[]>([]);
@@ -202,12 +203,14 @@ export default function Billing() {
   const today = startOfDay(new Date());
   const limitDate = addDays(today, 3);
   
-  const displayedPayments = showAll
+  const displayedPayments = (showAll
     ? allPayments
     : allPayments.filter((p: any) => {
         const dueDate = startOfDay(new Date(p.due_date + "T12:00:00"));
         return dueDate <= limitDate;
-      });
+      })).filter((p: any) => 
+        p.students?.full_name?.toLowerCase().includes(search.toLowerCase())
+      );
 
   return (
     <div className="space-y-8">
@@ -256,6 +259,16 @@ export default function Billing() {
 
       <OverduePaymentsList />
 
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar por nome do aluno..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="p-6 border-b border-border flex items-center justify-between">
           <div>
@@ -266,8 +279,9 @@ export default function Billing() {
               {showAll ? "Exibindo todas as mensalidades não pagas." : "Exibindo mensalidades vencidas, de hoje ou que vencem em até 3 dias."}
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => setShowAll(!showAll)}>
-            {showAll ? "Ver apenas próximos" : "Ver todas"}
+          <Button variant={showAll ? "default" : "outline"} size="sm" onClick={() => setShowAll(!showAll)} className="gap-2 transition-all shadow-sm">
+            {showAll ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            {showAll ? "Ocultar Distantes" : "Ver Todas"}
           </Button>
         </div>
         <table className="w-full">

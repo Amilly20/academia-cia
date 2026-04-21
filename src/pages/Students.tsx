@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import StudentFormDialog from "@/StudentFormDialog";
 import { toast } from "@/hooks/use-toast";
-import { UserX, Search, Trash2, Eye, MoreVertical, Loader2, Calendar, Pencil, MessageCircle, Send } from "lucide-react";
+import { UserX, Search, Trash2, Eye, MoreVertical, Loader2, Calendar, Pencil, MessageCircle, Send, DollarSign } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getFirebaseData, setFirebaseData } from "@/lib/localStorage";
@@ -24,6 +24,8 @@ export default function Students() {
   const [newEnrollmentDate, setNewEnrollmentDate] = useState("");
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
+  const [editingFeeId, setEditingFeeId] = useState<string | null>(null);
+  const [newFee, setNewFee] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
   const [chatStudent, setChatStudent] = useState<any>(null);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
@@ -98,6 +100,24 @@ export default function Students() {
     setStudents(updatedStudents);
     toast({ title: "Nome atualizado!" });
     setEditingNameId(null);
+  };
+
+  const handleSaveFee = async (id: string) => {
+    const parsedFee = parseFloat(newFee);
+    if (isNaN(parsedFee) || parsedFee < 0) {
+      toast({ title: "Valor inválido", variant: "destructive" });
+      return;
+    }
+    const data = await getFirebaseData();
+    const studentsArray = Object.values(data.students || {});
+    const updatedStudents = studentsArray.map((s: any) =>
+      s.id === id ? { ...s, monthly_fee: parsedFee } : s
+    );
+    data.students = updatedStudents;
+    await setFirebaseData(data);
+    setStudents(updatedStudents);
+    toast({ title: "Valor atualizado!" });
+    setEditingFeeId(null);
   };
 
   const openChat = async (student: any) => {
@@ -204,7 +224,22 @@ export default function Students() {
                             </>
                           )}
                         </div>
-                        {s.monthly_fee && editingNameId !== s.id && <p className="text-xs text-muted-foreground">R$ {Number(s.monthly_fee).toFixed(2)}</p>}
+                        {editingFeeId === s.id ? (
+                          <div className="flex items-center gap-2 mt-1">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={newFee}
+                              onChange={(e) => setNewFee(e.target.value)}
+                              className="h-6 w-24 text-xs"
+                              autoFocus
+                            />
+                            <Button size="sm" onClick={() => handleSaveFee(s.id)} className="h-6 px-2 text-xs bg-success hover:bg-success/90">Salvar</Button>
+                            <Button size="sm" variant="outline" onClick={() => setEditingFeeId(null)} className="h-6 px-2 text-xs">Cancelar</Button>
+                          </div>
+                        ) : (
+                          s.monthly_fee && editingNameId !== s.id && <p className="text-xs text-muted-foreground">R$ {Number(s.monthly_fee).toFixed(2)}</p>
+                        )}
                       </div>
                     </div>
                   </td>
@@ -254,6 +289,13 @@ export default function Students() {
                         }} className="cursor-pointer">
                           <Pencil className="w-4 h-4 mr-2" />
                           Editar Nome
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => {
+                          setEditingFeeId(s.id);
+                          setNewFee(s.monthly_fee ? String(s.monthly_fee) : "");
+                        }} className="cursor-pointer">
+                          <DollarSign className="w-4 h-4 mr-2" />
+                          Editar Valor
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => {
                           setEditingDateId(s.id);

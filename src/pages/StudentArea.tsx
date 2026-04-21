@@ -9,7 +9,7 @@ import { useNavigate, useLocation, Link } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Copy, AlertCircle, Calendar, Users, Package, CreditCard, CheckCircle, Upload, MessageCircle, Loader2, Trash2, Camera, Wallet, Send } from "lucide-react";
-import { getFirebaseData, setFirebaseData } from "@/lib/localStorage";
+import { getFirebaseData, setFirebaseData, generateStudentPayments, generateAutomaticNotifications } from "@/lib/localStorage";
 
 export default function StudentArea() {
   const [uniqueCode, setUniqueCode] = useState("");
@@ -44,33 +44,52 @@ export default function StudentArea() {
     });
   };
 
-  const loadStudentData = (student, allData) => {
+  const loadStudentData = async (student: any, allData: any) => {
+    let currentData = allData;
+    
+    // Roda o gerador automático para garantir que as mensalidades do mês atual existam
+    const studentsArray = Object.values(currentData.students || {});
+    const paymentsArray = Object.values(currentData.payments || {});
+    
+    const updatedPayments = generateStudentPayments(studentsArray, paymentsArray);
+    let needsUpdate = false;
+    if (updatedPayments.length > paymentsArray.length) {
+      currentData.payments = updatedPayments;
+      needsUpdate = true;
+    }
+    if (generateAutomaticNotifications(currentData)) {
+      needsUpdate = true;
+    }
+    if (needsUpdate) {
+      await setFirebaseData(currentData);
+    }
+
     setLoggedInStudent(student);
 
-    const payments = Object.values(allData.payments || {})
+    const payments = Object.values(currentData.payments || {})
       .filter((p: any) => p.student_id === student.id && p.status !== "paid" && p.status !== "archived")
       .sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
     setMyPayments(payments);
 
-    setAnnouncements(Object.values(allData.announcements || {}));
-    const events = Object.values(allData.events || {}).sort((a: any, b: any) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
+    setAnnouncements(Object.values(currentData.announcements || {}));
+    const events = Object.values(currentData.events || {}).sort((a: any, b: any) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
     setUpcomingEvents(events);
 
-    const lostItems = Object.values(allData.lostAndFound || {}).filter((item: any) => !item.claimed).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    const lostItems = Object.values(currentData.lostAndFound || {}).filter((item: any) => !item.claimed).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     setLostFoundItems(lostItems);
 
-    const todayBirthdays = calculateBirthdaysToday(Object.values(allData.students || {}));
+    const todayBirthdays = calculateBirthdaysToday(Object.values(currentData.students || {}));
     setBirthdaysToday(todayBirthdays);
 
-    const studentNotifications = Object.values(allData.notifications || {}).filter((n: any) => n.student_id === student.id).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    const studentNotifications = Object.values(currentData.notifications || {}).filter((n: any) => n.student_id === student.id).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     setMyNotifications(studentNotifications);
 
-    setPaymentProofs(Object.values(allData.paymentProofs || {}));
+    setPaymentProofs(Object.values(currentData.paymentProofs || {}));
     
-    const messages = Object.values(allData.messages || {}).filter((m: any) => m.student_id === student.id).sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    const messages = Object.values(currentData.messages || {}).filter((m: any) => m.student_id === student.id).sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
     setChatMessages(messages);
     
-    setPixKey((allData.settings?.PIX_KEY && allData.settings.PIX_KEY !== "12.345.678/0001-90") ? allData.settings.PIX_KEY : "00074814540");
+    setPixKey((currentData.settings?.PIX_KEY && currentData.settings.PIX_KEY !== "12.345.678/0001-90") ? currentData.settings.PIX_KEY : "00074814540");
   };
 
   useEffect(() => {
@@ -80,7 +99,7 @@ export default function StudentArea() {
         const allData = await getFirebaseData();
         const student = Object.values(allData.students || {}).find((s: any) => s.unique_code === savedUniqueCode && s.status === "active");
         if (student) {
-          loadStudentData(student, allData);
+          await loadStudentData(student, allData);
         } else {
           localStorage.removeItem("studentUniqueCode");
           toast({ title: "Sessão expirada", description: "Seu código de acesso não é mais válido ou sua conta está inativa. Por favor, faça login novamente.", variant: "destructive" });
@@ -101,7 +120,7 @@ export default function StudentArea() {
       
       if (student) {
         localStorage.setItem("studentUniqueCode", uniqueCode);
-        loadStudentData(student, allData);
+        await loadStudentData(student, allData);
         toast({ title: "Login bem-sucedido!", description: "Bem-vindo de volta!" });
       } else {
         toast({ title: "Aluno não encontrado", description: "Sua conta não foi encontrada ou está inativa. Por favor, registre-se novamente.", variant: "destructive" });

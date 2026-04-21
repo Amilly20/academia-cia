@@ -333,7 +333,7 @@ export default function StudentArea() {
                 className="p-3 rounded-lg border-2 border-success/20 bg-success/5"
               >
                 <p className="text-sm font-medium text-foreground">
-                  🎉 {person.full_name} está fazendo aniversário hoje! Parabéns!
+                  🎉 {person.full_name} está fazendo aniversário hoje! Parabéns, Feliz Aniversário!
                 </p>
               </div>
             ))}

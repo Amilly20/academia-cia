@@ -47,27 +47,27 @@ export default function StudentArea() {
   const loadStudentData = (student, allData) => {
     setLoggedInStudent(student);
 
-    const payments = (allData.payments || [])
-      .filter(p => p.student_id === student.id && p.status !== "paid" && p.status !== "archived")
-      .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+    const payments = Object.values(allData.payments || {})
+      .filter((p: any) => p.student_id === student.id && p.status !== "paid" && p.status !== "archived")
+      .sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
     setMyPayments(payments);
 
-    setAnnouncements(allData.announcements || []);
-    const events = (allData.events || []).sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
+    setAnnouncements(Object.values(allData.announcements || {}));
+    const events = Object.values(allData.events || {}).sort((a: any, b: any) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
     setUpcomingEvents(events);
 
-    const lostItems = (allData.lostAndFound || []).filter(item => !item.claimed).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    const lostItems = Object.values(allData.lostAndFound || {}).filter((item: any) => !item.claimed).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     setLostFoundItems(lostItems);
 
-    const todayBirthdays = calculateBirthdaysToday(allData.students || []);
+    const todayBirthdays = calculateBirthdaysToday(Object.values(allData.students || {}));
     setBirthdaysToday(todayBirthdays);
 
-    const studentNotifications = (allData.notifications || []).filter((n: any) => n.student_id === student.id).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    const studentNotifications = Object.values(allData.notifications || {}).filter((n: any) => n.student_id === student.id).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     setMyNotifications(studentNotifications);
 
-    setPaymentProofs(allData.paymentProofs || []);
+    setPaymentProofs(Object.values(allData.paymentProofs || {}));
     
-    const messages = (allData.messages || []).filter((m: any) => m.student_id === student.id).sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    const messages = Object.values(allData.messages || {}).filter((m: any) => m.student_id === student.id).sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
     setChatMessages(messages);
     
     setPixKey((allData.settings?.PIX_KEY && allData.settings.PIX_KEY !== "12.345.678/0001-90") ? allData.settings.PIX_KEY : "00074814540");
@@ -78,7 +78,7 @@ export default function StudentArea() {
       const savedUniqueCode = localStorage.getItem("studentUniqueCode");
       if (savedUniqueCode) {
         const allData = await getFirebaseData();
-        const student = (allData.students || []).find(s => s.unique_code === savedUniqueCode && s.status === "active");
+        const student = Object.values(allData.students || {}).find((s: any) => s.unique_code === savedUniqueCode && s.status === "active");
         if (student) {
           loadStudentData(student, allData);
         } else {
@@ -97,7 +97,7 @@ export default function StudentArea() {
     setLoginLoading(true);
     try {
       const allData = await getFirebaseData();
-      const student = (allData.students || []).find(s => s.unique_code === uniqueCode && s.status === "active");
+      const student = Object.values(allData.students || {}).find((s: any) => s.unique_code === uniqueCode && s.status === "active");
       
       if (student) {
         localStorage.setItem("studentUniqueCode", uniqueCode);

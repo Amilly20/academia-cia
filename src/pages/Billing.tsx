@@ -384,7 +384,18 @@ export default function Billing() {
                             <Button size="sm" variant="ghost" onClick={() => handleEditPayment(p)} className="text-primary hover:text-primary hover:bg-primary/10">
                               <Edit2 className="w-4 h-4 mr-1" /> Editar
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={() => handleMarkPaid(p.id)} className="text-success hover:text-success hover:bg-success/10">
+                            <Button 
+                              size="sm" 
+                              variant="ghost" 
+                              onClick={() => {
+                                if (!proof) {
+                                  toast({ title: "Ação Bloqueada", description: "O aluno precisa enviar o comprovante pelo aplicativo para você poder confirmar.", variant: "destructive" });
+                                  return;
+                                }
+                                handleMarkPaid(p.id);
+                              }} 
+                              className="text-success hover:text-success hover:bg-success/10"
+                            >
                               <Check className="w-4 h-4 mr-1" /> Confirmar
                             </Button>
                           </>

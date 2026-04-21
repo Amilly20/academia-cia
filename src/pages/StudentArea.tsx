@@ -116,14 +116,17 @@ export default function StudentArea() {
     setLoginLoading(true);
     try {
       const allData = await getFirebaseData();
-      const student = Object.values(allData.students || {}).find((s: any) => s.unique_code === uniqueCode && s.status === "active");
+      const inputCode = uniqueCode.trim(); // Remove espaços acidentais no início ou no final
+      const student = Object.values(allData.students || {}).find((s: any) => 
+        (s.unique_code === inputCode || s.password === inputCode) && s.status === "active"
+      );
       
       if (student) {
-        localStorage.setItem("studentUniqueCode", uniqueCode);
+        localStorage.setItem("studentUniqueCode", student.unique_code);
         await loadStudentData(student, allData);
         toast({ title: "Login bem-sucedido!", description: "Bem-vindo de volta!" });
       } else {
-        toast({ title: "Aluno não encontrado", description: "Sua conta não foi encontrada ou está inativa. Por favor, registre-se novamente.", variant: "destructive" });
+        toast({ title: "Conta não encontrada", description: "Verifique se você digitou corretamente, respeitando letras MAIÚSCULAS e minúsculas, e sem espaços no final.", variant: "destructive" });
       }
     } catch (error: any) {
       console.error("Erro ao fazer login:", error);

@@ -266,43 +266,41 @@ export default function Students() {
                           <MessageCircle className="w-4 h-4 mr-2" />
                           Chat com Aluno
                         </DropdownMenuItem>
-                        {s.status === "inactive" && (
-                          <>
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-muted-foreground cursor-pointer">
-                                  <Eye className="w-4 h-4 mr-2" />
-                                  Ver Senha
-                                </DropdownMenuItem>
-                              </DialogTrigger>
-                              <DialogContent className="bg-card">
-                                <DialogHeader>
-                                  <DialogTitle className="font-heading">Senha de {s.full_name}</DialogTitle>
-                                </DialogHeader>
-                                <div className="space-y-4 py-4">
-                                  <div>
-                                    <p className="text-sm text-muted-foreground mb-2">Código de Acesso:</p>
-                                    <div className="flex items-center gap-2">
-                                      <p className="text-xl font-bold text-primary font-mono">{s.unique_code}</p>
-                                      <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(s.unique_code); toast({ title: "Código copiado!" }); }}>
-                                        Copiar
-                                      </Button>
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-muted-foreground mb-2">Senha:</p>
-                                    <div className="flex items-center gap-2">
-                                      <p className="text-xl font-bold text-primary font-mono">{s.password}</p>
-                                      <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(s.password); toast({ title: "Senha copiada!" }); }}>
-                                        Copiar
-                                      </Button>
-                                    </div>
-                                  </div>
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-muted-foreground cursor-pointer">
+                            <Eye className="w-4 h-4 mr-2" />
+                            Ver Senha / Código
+                          </DropdownMenuItem>
+                        </DialogTrigger>
+                        <DialogContent className="bg-card">
+                          <DialogHeader>
+                            <DialogTitle className="font-heading">Acesso de {s.full_name}</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-4 py-4">
+                            <div>
+                              <p className="text-sm text-muted-foreground mb-2">Código de Acesso:</p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-xl font-bold text-primary font-mono">{s.unique_code}</p>
+                                <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(s.unique_code); toast({ title: "Código copiado!" }); }}>
+                                  Copiar
+                                </Button>
+                              </div>
+                            </div>
+                            {s.password && (
+                              <div>
+                                <p className="text-sm text-muted-foreground mb-2">Senha:</p>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-xl font-bold text-primary font-mono">{s.password}</p>
+                                  <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(s.password); toast({ title: "Senha copiada!" }); }}>
+                                    Copiar
+                                  </Button>
                                 </div>
-                              </DialogContent>
-                            </Dialog>
-                          </>
-                        )}
+                              </div>
+                            )}
+                          </div>
+                        </DialogContent>
+                      </Dialog>
                         <DropdownMenuItem onClick={() => deleteStudent(s.id, s.full_name)} className="text-destructive cursor-pointer">
                           <Trash2 className="w-4 h-4 mr-2" />
                           Deletar Aluno

@@ -178,6 +178,7 @@ export default function StudentArea() {
         sender: 'student',
         text: newMessage,
         created_at: new Date().toISOString(),
+        read: false,
       };
       
       messages.push(newMsg);

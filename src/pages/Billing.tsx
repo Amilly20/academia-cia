@@ -6,9 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import OverduePaymentsList from "@/OverduePaymentsList";
-import { Plus, Check, MessageCircle, Edit2, Trash2, Eye, Loader2 } from "lucide-react";
+import { Plus, Check, MessageCircle, Edit2, Trash2, Eye, Loader2, Wallet } from "lucide-react";
 import { useState, useEffect } from "react";
-import { format } from "date-fns";
+import { format, addDays, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getFirebaseData, setFirebaseData, generateStudentPayments, generateAutomaticNotifications } from "@/lib/localStorage";
 
@@ -18,6 +18,7 @@ export default function Billing() {
   const [editingValues, setEditingValues] = useState<any>({});
   const [form, setForm] = useState({ student_id: "", amount: "", due_date: "" });
   const [students, setStudents] = useState<any[]>([]);
+  const [showAll, setShowAll] = useState(false);
   const [allPayments, setAllPayments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [proofs, setProofs] = useState<any[]>([]);
@@ -49,7 +50,9 @@ export default function Billing() {
     setStudents(activeStudents);
 
     const paymentsWithStudents = Object.values(data.payments || {})
-      .filter((p: any) => p.status !== "paid" && p.status !== "archived")
+      .filter((p: any) => {
+        return p.status !== "paid" && p.status !== "archived";
+      })
       .map((payment: any) => {
         const student = studentsArray.find((s: any) => s.id === payment.student_id);
         return {
@@ -196,6 +199,16 @@ export default function Billing() {
     return <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   }
 
+  const today = startOfDay(new Date());
+  const limitDate = addDays(today, 3);
+  
+  const displayedPayments = showAll
+    ? allPayments
+    : allPayments.filter((p: any) => {
+        const dueDate = startOfDay(new Date(p.due_date + "T12:00:00"));
+        return dueDate <= limitDate;
+      });
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -244,8 +257,18 @@ export default function Billing() {
       <OverduePaymentsList />
 
       <div className="rounded-xl border border-border bg-card overflow-hidden">
-        <div className="p-6 border-b border-border">
-          <h3 className="font-heading font-semibold text-card-foreground">Mensalidades Pendentes</h3>
+        <div className="p-6 border-b border-border flex items-center justify-between">
+          <div>
+            <h3 className="font-heading font-semibold text-card-foreground">
+              {showAll ? "Todas as Mensalidades Pendentes" : "Próximos Vencimentos e Atrasos"}
+            </h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              {showAll ? "Exibindo todas as mensalidades não pagas." : "Exibindo mensalidades vencidas, de hoje ou que vencem em até 3 dias."}
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setShowAll(!showAll)}>
+            {showAll ? "Ver apenas próximos" : "Ver todas"}
+          </Button>
         </div>
         <table className="w-full">
           <thead>
@@ -261,7 +284,10 @@ export default function Billing() {
             {isLoading ? (
               <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">Carregando...</td></tr>
             ) : (
-              allPayments?.map((p) => {
+            displayedPayments?.length === 0 ? (
+              <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">Nenhuma mensalidade para exibir.</td></tr>
+            ) : (
+              displayedPayments?.map((p) => {
                 const proof = proofs.find((pr: any) => pr.paymentId === p.id);
                 return (
                 <tr key={p.id} className="hover:bg-muted/30 transition-colors">
@@ -316,7 +342,13 @@ export default function Billing() {
                         <DialogContent className="max-w-md">
                           <DialogHeader><DialogTitle>Comprovante - {p.students?.full_name || "Aluno"}</DialogTitle></DialogHeader>
                           <div className="mt-4 flex flex-col items-center gap-4">
-                            {proof.fileData?.startsWith("data:application/pdf") ? (
+                            {proof.isCash ? (
+                              <div className="bg-muted p-8 rounded-lg text-center w-full border border-border">
+                                <Wallet className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                                <p className="text-lg font-medium text-foreground">Pagamento em Dinheiro</p>
+                                <p className="text-sm text-muted-foreground mt-2">O aluno informou que o pagamento foi realizado presencialmente em dinheiro.</p>
+                              </div>
+                            ) : proof.fileData?.startsWith("data:application/pdf") ? (
                               <iframe src={proof.fileData} className="w-full h-96 border rounded" />
                             ) : (
                               <img src={proof.fileData} alt="Comprovante" className="max-w-full max-h-96 object-contain rounded" />
@@ -350,8 +382,9 @@ export default function Billing() {
                     )}
                   </td>
                 </tr>
-            );
-          })
+                );
+              })
+            )
             )}
           </tbody>
         </table>

@@ -147,6 +147,7 @@ export default function StudentArea() {
 
   const handlePaymentSubmission = async (p: any, proofObj: any) => {
     const data = await getFirebaseData();
+    const settings = data.settings || {};
     
     // Salva o comprovante (caso o gestor queira consultar no futuro)
     const proofs = data.paymentProofs || [];
@@ -200,6 +201,33 @@ export default function StudentArea() {
         description: "O gestor foi notificado e dará a baixa na sua mensalidade."
       });
     }
+
+    // Dispara o Webhook (Make.com) de forma invisível para o usuário
+    if (settings.webhookUrl) {
+      try {
+        const payload = {
+          event: "payment_submitted",
+          student: {
+            id: loggedInStudent.id,
+            name: loggedInStudent.full_name,
+            phone: loggedInStudent.phone,
+          },
+          payment: {
+            id: p.id,
+            amount: p.amount,
+            dueDate: p.due_date,
+            isCash: proofObj.isCash || false
+          }
+        };
+        fetch(settings.webhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }).catch(e => console.error("Webhook error:", e));
+      } catch (err) {
+        console.error("Failed to send webhook", err);
+      }
+    }
   };
 
   const handleProfilePictureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -249,7 +277,7 @@ export default function StudentArea() {
 
     try {
       const data = await getFirebaseData();
-      const messages = data.messages || [];
+      const messages = Object.values(data.messages || {});
       
       const newMsg = {
         id: String(Date.now()),

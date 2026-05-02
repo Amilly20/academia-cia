@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-import { Save, Image as ImageIcon, ShieldCheck, Copy, CreditCard, Loader2, Trash2, AlertTriangle } from "lucide-react";
+import { Save, Image as ImageIcon, ShieldCheck, Copy, CreditCard, Loader2, Trash2, AlertTriangle, Globe } from "lucide-react";
 import { getFirebaseData, setFirebaseData } from "@/lib/localStorage";
 import {
   AlertDialog,
@@ -23,6 +23,8 @@ export default function Settings() {
   const [logoUrl, setLogoUrl] = useState("");
   const [pixKey, setPixKey] = useState("");
   const [editingPix, setEditingPix] = useState(false);
+  const [webhookUrl, setWebhookUrl] = useState("");
+  const [editingWebhook, setEditingWebhook] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
 
   useEffect(() => {
@@ -32,6 +34,9 @@ export default function Settings() {
       setPixKey((settings.PIX_KEY && settings.PIX_KEY !== "12.345.678/0001-90") ? settings.PIX_KEY : "00074814540");
       if (settings.logoUrl) {
         setLogoUrl(settings.logoUrl);
+      }
+      if (settings.webhookUrl) {
+        setWebhookUrl(settings.webhookUrl);
       }
     };
     fetchData();
@@ -76,6 +81,16 @@ export default function Settings() {
     toast({ title: "Chave PIX copiada!" });
   };
 
+  const handleSaveWebhook = async () => {
+    const data = await getFirebaseData();
+    if (!data.settings) data.settings = {};
+    data.settings.webhookUrl = webhookUrl;
+    await setFirebaseData(data);
+    
+    toast({ title: "Webhook atualizado", description: "URL salva com sucesso!" });
+    setEditingWebhook(false);
+  };
+
   const handleResetRevenue = async () => {
     setIsResetting(true);
     try {
@@ -105,6 +120,47 @@ export default function Settings() {
       </div>
 
       <div className="bg-card border border-border rounded-xl p-6 shadow-sm space-y-6">
+        <div>
+          <h3 className="text-lg font-heading font-semibold text-card-foreground mb-4 flex items-center gap-2">
+            <Globe className="w-5 h-5 text-primary" /> Webhook de Notificações (Make.com)
+          </h3>
+          <div className="space-y-4 mb-6">
+            <p className="text-sm text-muted-foreground">
+              Configure a URL do Webhook (Make.com, n8n, etc) para receber os dados "invisivelmente" quando o aluno informar um pagamento, permitindo disparar mensagens no Z-API.
+            </p>
+            {!editingWebhook ? (
+              <div className="bg-muted p-4 rounded-lg border border-border">
+                <p className="text-sm font-medium text-muted-foreground mb-2">URL Atual:</p>
+                <div className="flex items-center gap-2 justify-between">
+                  <p className="text-sm font-mono text-card-foreground break-all">{webhookUrl || "Não configurado"}</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <Input 
+                  value={webhookUrl} 
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                  placeholder="Ex: https://hook.us1.make.com/..."
+                  className="font-mono"
+                />
+                <div className="flex gap-2">
+                  <Button onClick={handleSaveWebhook} className="gap-2 gradient-primary text-primary-foreground border-0 flex-1">
+                    <Save className="w-4 h-4" /> Salvar Webhook
+                  </Button>
+                  <Button onClick={() => setEditingWebhook(false)} variant="outline" className="flex-1">
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            )}
+            {!editingWebhook && (
+              <Button onClick={() => setEditingWebhook(true)} variant="outline" className="w-full">
+                Editar Webhook
+              </Button>
+            )}
+          </div>
+        </div>
+
         <div>
           <h3 className="text-lg font-heading font-semibold text-card-foreground mb-4 flex items-center gap-2">
             <ImageIcon className="w-5 h-5 text-primary" /> Logo da Academia

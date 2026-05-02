@@ -122,10 +122,10 @@ export default function Students() {
 
   const openChat = async (student: any) => {
     setChatStudent(student);
-    const data = await getFirebaseData();
-    const messages = (data.messages || []).filter((m: any) => m.student_id === student.id).sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-    setChatMessages(messages);
     setChatOpen(true);
+    const data = await getFirebaseData();
+    const messages = Object.values(data.messages || {}).filter((m: any) => m.student_id === student.id).sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    setChatMessages(messages);
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -133,7 +133,7 @@ export default function Students() {
     if (!newMessage.trim() || !chatStudent) return;
     try {
       const data = await getFirebaseData();
-      const messages = data.messages || [];
+      const messages = Object.values(data.messages || {});
       const newMsg = {
         id: String(Date.now()),
         student_id: chatStudent.id,

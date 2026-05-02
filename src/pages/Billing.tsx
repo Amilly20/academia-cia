@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import OverduePaymentsList from "@/OverduePaymentsList";
-import { Plus, Check, MessageCircle, Edit2, Trash2, Eye, EyeOff, Loader2, Wallet, Search } from "lucide-react";
+import { Plus, Check, MessageCircle, Edit2, Trash2, Eye, EyeOff, Loader2, CheckCircle, Search } from "lucide-react";
 import { useState, useEffect } from "react";
 import { format, addDays, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -358,9 +358,9 @@ export default function Billing() {
                           <div className="mt-4 flex flex-col items-center gap-4">
                             {proof.isCash ? (
                               <div className="bg-muted p-8 rounded-lg text-center w-full border border-border">
-                                <Wallet className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                                <p className="text-lg font-medium text-foreground">Pagamento em Dinheiro</p>
-                                <p className="text-sm text-muted-foreground mt-2">O aluno informou que o pagamento foi realizado presencialmente em dinheiro.</p>
+                              <CheckCircle className="w-12 h-12 mx-auto text-success mb-4" />
+                              <p className="text-lg font-medium text-foreground">Confirmado pelo Aluno</p>
+                              <p className="text-sm text-muted-foreground mt-2">O aluno clicou no botão de confirmar o pagamento pelo aplicativo sem enviar o anexo da imagem.</p>
                               </div>
                             ) : proof.fileData?.startsWith("data:application/pdf") ? (
                               <iframe src={proof.fileData} className="w-full h-96 border rounded" />

@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getFirebaseData } from "@/lib/localStorage";
-import { Search, Loader2, Eye, Wallet } from "lucide-react";
+import { Search, Loader2, Eye, CheckCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
@@ -123,9 +123,9 @@ export default function PaymentHistory() {
                                 <div className="mt-4 flex flex-col items-center gap-4">
                                   {proof.isCash ? (
                                     <div className="bg-muted p-8 rounded-lg text-center w-full border border-border">
-                                      <Wallet className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                                      <p className="text-lg font-medium text-foreground">Pagamento em Dinheiro</p>
-                                      <p className="text-sm text-muted-foreground mt-2">Este pagamento foi recebido presencialmente em dinheiro.</p>
+                              <CheckCircle className="w-12 h-12 mx-auto text-success mb-4" />
+                              <p className="text-lg font-medium text-foreground">Confirmado pelo Aluno</p>
+                              <p className="text-sm text-muted-foreground mt-2">O aluno confirmou o pagamento pelo aplicativo sem enviar anexo.</p>
                                     </div>
                                   ) : proof.fileData?.startsWith("data:application/pdf") ? (
                                     <iframe src={proof.fileData} className="w-full h-96 border rounded" />

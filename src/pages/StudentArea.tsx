@@ -32,6 +32,33 @@ export default function StudentArea() {
   const [newMessage, setNewMessage] = useState("");
   const [isChatOpen, setIsChatOpen] = useState(false);
 
+  // Função para comprimir imagens antes de salvar no banco para evitar lentidão
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          let width = img.width;
+          let height = img.height;
+          const MAX_WIDTH = 800;
+          if (width > MAX_WIDTH) {
+            height = Math.round((height * MAX_WIDTH) / width);
+            width = MAX_WIDTH;
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx?.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", 0.6)); // 60% de qualidade
+        };
+      };
+    });
+  };
+
   // Calculate age from birth date (approximate)
   const calculateBirthdaysToday = (students: any[]) => {
     const today = new Date();
@@ -155,53 +182,42 @@ export default function StudentArea() {
     proofs.push(proofObj);
     data.paymentProofs = proofs;
 
-    if (!proofObj.isCash) {
-      // Dá a baixa automática na mensalidade se enviou comprovante
-      const payments = Object.values(data.payments || {});
-      const paymentIndex = payments.findIndex((pay: any) => pay.id === p.id);
+    // Dá a baixa automática na mensalidade (seja com comprovante ou apenas confirmando)
+    const payments = Object.values(data.payments || {});
+    const paymentIndex = payments.findIndex((pay: any) => pay.id === p.id);
+    
+    if (paymentIndex !== -1) {
+      const payment = payments[paymentIndex] as any;
+      payment.status = "paid";
+      payment.paid_date = new Date().toISOString().split("T")[0];
+
+      // Envia a notificação de sucesso pro aluno
+      let notifications = Object.values(data.notifications || {});
+      const amount = Number(payment.amount).toFixed(2).replace(".", ",");
+      const dueDate = format(new Date(payment.due_date + "T12:00:00"), "dd/MM/yyyy", { locale: ptBR });
       
-      if (paymentIndex !== -1) {
-        const payment = payments[paymentIndex] as any;
-        payment.status = "paid";
-        payment.paid_date = new Date().toISOString().split("T")[0];
+      notifications = notifications.filter((n: any) => 
+        !(n.student_id === payment.student_id && (n.title === "Lembrete de Cobrança" || n.title === "Cobrança de Mensalidade"))
+      );
 
-        // Envia a notificação de sucesso pro aluno
-        let notifications = Object.values(data.notifications || {});
-        const amount = Number(payment.amount).toFixed(2).replace(".", ",");
-        const dueDate = format(new Date(payment.due_date + "T12:00:00"), "dd/MM/yyyy", { locale: ptBR });
-        
-        notifications = notifications.filter((n: any) => 
-          !(n.student_id === payment.student_id && (n.title === "Lembrete de Cobrança" || n.title === "Cobrança de Mensalidade"))
-        );
-
-        notifications.push({
-          id: Date.now().toString(),
-          student_id: payment.student_id,
-          title: "Pagamento Confirmado! ✅",
-          description: `Seu pagamento de R$ ${amount} referente ao vencimento ${dueDate} foi baixado com sucesso no sistema.`,
-          created_at: new Date().toISOString()
-        });
-        data.notifications = notifications;
-      }
-
-      await setFirebaseData(data);
-      setPaymentProofs(proofs);
-      setMyPayments(prev => prev.filter((pay: any) => pay.id !== p.id));
-      
-      toast({ 
-        title: "Pagamento Confirmado!", 
-        description: "Sua mensalidade foi baixada automaticamente pelo sistema."
+      notifications.push({
+        id: Date.now().toString(),
+        student_id: payment.student_id,
+        title: "Pagamento Confirmado! ✅",
+        description: `Seu pagamento de R$ ${amount} referente ao vencimento ${dueDate} foi baixado com sucesso no sistema.`,
+        created_at: new Date().toISOString()
       });
-    } else {
-      // Se for dinheiro, só salva o aviso e espera aprovação manual
-      await setFirebaseData(data);
-      setPaymentProofs(proofs);
-      
-      toast({ 
-        title: "Aviso Enviado!", 
-        description: "O gestor foi notificado e dará a baixa na sua mensalidade."
-      });
+      data.notifications = notifications;
     }
+
+    await setFirebaseData(data);
+    setPaymentProofs(proofs);
+    setMyPayments(prev => prev.filter((pay: any) => pay.id !== p.id));
+    
+    toast({ 
+      title: "Pagamento Confirmado!", 
+      description: "Sua mensalidade foi baixada automaticamente pelo sistema."
+    });
 
     // Dispara o Webhook (Make.com) de forma invisível para o usuário
     if (settings.webhookUrl) {
@@ -231,29 +247,25 @@ export default function StudentArea() {
     }
   };
 
-  const handleProfilePictureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProfilePictureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const newImageUrl = reader.result as string;
-        setLoggedInStudent(prev => ({ ...prev, profile_picture_url: newImageUrl }));
-        toast({ title: "Foto de perfil atualizada!" });
+      const newImageUrl = await compressImage(file);
+      setLoggedInStudent(prev => ({ ...prev, profile_picture_url: newImageUrl }));
+      toast({ title: "Foto de perfil atualizada!" });
 
-        try {
-          const data = await getFirebaseData();
-          const studentsArray = Object.values(data.students || {});
-          const studentIndex = studentsArray.findIndex((s: any) => s.id === loggedInStudent.id);
-          if (studentIndex !== -1) {
-            (studentsArray[studentIndex] as any).profile_picture_url = newImageUrl;
-            data.students = studentsArray;
-            await setFirebaseData(data);
-          }
-        } catch (error) {
-          toast({ title: "Erro ao salvar a foto", variant: "destructive" });
+      try {
+        const data = await getFirebaseData();
+        const studentsArray = Object.values(data.students || {});
+        const studentIndex = studentsArray.findIndex((s: any) => s.id === loggedInStudent.id);
+        if (studentIndex !== -1) {
+          (studentsArray[studentIndex] as any).profile_picture_url = newImageUrl;
+          data.students = studentsArray;
+          await setFirebaseData(data);
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (error) {
+        toast({ title: "Erro ao salvar a foto", variant: "destructive" });
+      }
     }
   };
 
@@ -582,21 +594,29 @@ export default function StudentArea() {
                                 onChange={(e) => {
                                   const file = e.target.files?.[0];
                                   if (file) {
-                                    const reader = new FileReader();
-                                    reader.onloadend = () => {
-                                      // Store proof of payment
-                                      const proof = {
-                                        paymentId: p.id,
-                                        fileName: file.name,
-                                        fileData: reader.result,
-                                        uploadedAt: new Date().toISOString(),
+                                    if (file.type === "application/pdf") {
+                                      const reader = new FileReader();
+                                      reader.onloadend = () => {
+                                        const proof = {
+                                          paymentId: p.id,
+                                          fileName: file.name,
+                                          fileData: reader.result,
+                                          uploadedAt: new Date().toISOString(),
+                                        };
+                                        setPendingProofs(prev => ({ ...prev, [p.id]: proof }));
                                       };
-                                  setPendingProofs(prev => ({
-                                    ...prev,
-                                    [p.id]: proof
-                                  }));
-                                    };
-                                    reader.readAsDataURL(file);
+                                      reader.readAsDataURL(file);
+                                    } else {
+                                      compressImage(file).then((compressedData) => {
+                                        const proof = {
+                                          paymentId: p.id,
+                                          fileName: file.name,
+                                          fileData: compressedData,
+                                          uploadedAt: new Date().toISOString(),
+                                        };
+                                        setPendingProofs(prev => ({ ...prev, [p.id]: proof }));
+                                      });
+                                    }
                                   }
                                 }}
                               />
@@ -628,15 +648,15 @@ export default function StudentArea() {
                               </div>
                             </div>
 
-                            <div>
-                              <Label className="text-base font-semibold mb-3 block">Pagamento em Dinheiro</Label>
-                              <Button 
-                                variant="outline" 
-                                className="w-full gap-2"
+                          <div className="bg-success/5 p-4 rounded-xl border border-success/20">
+                            <Label className="text-base font-semibold text-success mb-2 block">Já realizou o pagamento?</Label>
+                            <p className="text-xs text-muted-foreground mb-4">Clique abaixo para confirmar o pagamento instantaneamente caso não queira enviar o comprovante em imagem.</p>
+                            <Button 
+                              className="w-full gap-2 bg-success hover:bg-success/90 text-white shadow-sm"
                                 onClick={() => {
                                   const proof = {
                                     paymentId: p.id,
-                                    fileName: "Pagamento em Dinheiro",
+                                  fileName: "Confirmado pelo Aluno",
                                     fileData: null,
                                     isCash: true,
                                     uploadedAt: new Date().toISOString(),
@@ -644,15 +664,10 @@ export default function StudentArea() {
                                   handlePaymentSubmission(p, proof);
                                 }}
                               >
-                                <Wallet className="w-4 h-4" /> Informar pagamento em dinheiro
+                              <CheckCircle className="w-4 h-4" /> Confirmar Pagamento Agora
                               </Button>
                             </div>
 
-                            <div className="bg-info/5 p-4 rounded-lg border border-info/20 mt-2">
-                              <p className="text-xs text-muted-foreground">
-                                ℹ️ Ao enviar o comprovante a mensalidade será baixada automaticamente. Pagamentos em dinheiro aguardarão aprovação.
-                              </p>
-                            </div>
                           </div>
                         </DialogContent>
                       </Dialog>

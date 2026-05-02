@@ -58,10 +58,22 @@ export default function Students() {
       const data = await getFirebaseData();
       const studentsArray = Object.values(data.students || {});
       const paymentsArray = Object.values(data.payments || {});
-      const updatedStudents = studentsArray.filter((s: any) => s.id !== id);
-      const updatedPayments = paymentsArray.filter((p: any) => p.student_id !== id);
+      const updatedStudents = studentsArray.filter((s: any) => String(s.id) !== String(id));
+      const updatedPayments = paymentsArray.filter((p: any) => String(p.student_id) !== String(id));
       data.students = updatedStudents;
       data.payments = updatedPayments;
+      
+      if (data.notifications) {
+        data.notifications = Object.values(data.notifications).filter((n: any) => String(n.student_id) !== String(id));
+      }
+      if (data.messages) {
+        data.messages = Object.values(data.messages).filter((m: any) => String(m.student_id) !== String(id));
+      }
+      if (data.paymentProofs) {
+        const remainingPaymentIds = new Set(updatedPayments.map((p: any) => String(p.id)));
+        data.paymentProofs = Object.values(data.paymentProofs).filter((pr: any) => remainingPaymentIds.has(String(pr.paymentId)));
+      }
+
       await setFirebaseData(data);
       setStudents(updatedStudents);
       toast({ title: "Aluno deletado com sucesso" });

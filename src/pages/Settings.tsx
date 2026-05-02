@@ -26,6 +26,7 @@ export default function Settings() {
   const [webhookUrl, setWebhookUrl] = useState("");
   const [editingWebhook, setEditingWebhook] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [isClearingProofs, setIsClearingProofs] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -42,14 +43,37 @@ export default function Settings() {
     fetchData();
   }, []);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          let width = img.width;
+          let height = img.height;
+          const MAX_WIDTH = 400; // Logo não precisa ser maior que 400px
+          if (width > MAX_WIDTH) {
+            height = Math.round((height * MAX_WIDTH) / width);
+            width = MAX_WIDTH;
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx?.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/png", 0.8));
+        };
+      };
+    });
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setLogoUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      const compressedData = await compressImage(file);
+      setLogoUrl(compressedData);
     }
   };
 
@@ -89,6 +113,20 @@ export default function Settings() {
     
     toast({ title: "Webhook atualizado", description: "URL salva com sucesso!" });
     setEditingWebhook(false);
+  };
+
+  const handleClearProofs = async () => {
+    setIsClearingProofs(true);
+    try {
+      const data = await getFirebaseData();
+      data.paymentProofs = []; // Deleta todos os comprovantes
+      await setFirebaseData(data);
+      toast({ title: "Comprovantes Apagados!", description: "O banco de dados foi limpo e o sistema ficará mais rápido." });
+    } catch (error) {
+      toast({ title: "Erro ao limpar comprovantes", variant: "destructive" });
+    } finally {
+      setIsClearingProofs(false);
+    }
   };
 
   const handleResetRevenue = async () => {
@@ -158,6 +196,28 @@ export default function Settings() {
                 Editar Webhook
               </Button>
             )}
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-lg font-heading font-semibold text-warning mb-4 flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5" /> Manutenção e Limpeza
+          </h3>
+          <div className="space-y-4 rounded-lg border border-warning/50 bg-warning/5 p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-medium text-card-foreground">Limpar Comprovantes Antigos</p>
+                <p className="text-xs text-muted-foreground mt-1">Se o sistema estiver lento, pode ser devido ao acúmulo de imagens grandes. Esta ação apagará as imagens dos comprovantes salvos (os pagamentos continuarão registrados como pagos).</p>
+              </div>
+              <Button 
+                variant="outline" 
+                onClick={handleClearProofs} 
+                disabled={isClearingProofs} 
+                className="mt-2 sm:mt-0 text-warning border-warning hover:bg-warning/10"
+              >
+                {isClearingProofs ? "Limpando..." : "Limpar Comprovantes"}
+              </Button>
+            </div>
           </div>
         </div>
 

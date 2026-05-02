@@ -26,6 +26,7 @@ export default function StudentArea() {
   const [myNotifications, setMyNotifications] = useState<any[]>([]);
   const [paymentProofs, setPaymentProofs] = useState<any[]>([]);
   const [pixKey, setPixKey] = useState("00074814540");
+  const [pendingProofs, setPendingProofs] = useState<Record<string, any>>({});
 
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -590,13 +591,32 @@ export default function StudentArea() {
                                         fileData: reader.result,
                                         uploadedAt: new Date().toISOString(),
                                       };
-                                      handlePaymentSubmission(p, proof);
+                                  setPendingProofs(prev => ({
+                                    ...prev,
+                                    [p.id]: proof
+                                  }));
                                     };
                                     reader.readAsDataURL(file);
                                   }
                                 }}
                               />
-                              <p className="text-xs text-muted-foreground mt-2">📎 Faça uma captura de tela ou tire uma foto do comprovante e envie</p>
+                          <p className="text-xs text-muted-foreground mt-2">📎 Faça uma captura de tela ou tire uma foto do comprovante e selecione-o acima</p>
+                          
+                          {pendingProofs[p.id] && (
+                            <Button 
+                              className="w-full mt-4 bg-success hover:bg-success/90 text-white gap-2"
+                              onClick={() => {
+                                handlePaymentSubmission(p, pendingProofs[p.id]);
+                                setPendingProofs(prev => {
+                                  const next = {...prev};
+                                  delete next[p.id];
+                                  return next;
+                                });
+                              }}
+                            >
+                              <Upload className="w-4 h-4" /> Enviar Comprovante Selecionado
+                            </Button>
+                          )}
                             </div>
 
                             <div className="relative my-4">

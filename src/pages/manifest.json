@@ -1,0 +1,26 @@
+{
+  "name": "Cia Fitness",
+  "short_name": "Cia Fitness",
+  "description": "Sistema da Academia Cia Fitness",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "background_color": "#fa6404",
+  "theme_color": "#fa6404",
+  "orientation": "portrait",
+  "dir": "ltr",
+  "lang": "pt-BR",
+  "categories": ["fitness", "health"],
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

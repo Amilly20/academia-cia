@@ -210,6 +210,46 @@ export const generateAutomaticNotifications = (data: any): boolean => {
   return modified;
 };
 
+export const uploadFileToStorage = async (file: File | Blob): Promise<string> => {
+  // Verificado: O bucketName está correto com o link do seu projeto no Firebase.
+  const bucketName = "academiacia-b2ce9.firebasestorage.app";
+  const mime = file.type || 'application/octet-stream';
+  let extension = 'bin';
+  if (mime === 'application/pdf') extension = 'pdf';
+  else if (mime === 'image/jpeg') extension = 'jpg';
+  else if (mime === 'image/png') extension = 'png';
+  else extension = mime.split('/')[1] || 'bin';
+
+  const name = `uploads/${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
+  const url = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o?name=${encodeURIComponent(name)}`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': mime },
+    body: file
+  });
+
+  if (!response.ok) throw new Error("Erro ao fazer upload do arquivo.");
+  const data = await response.json();
+  return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(name)}?alt=media&token=${data.downloadTokens}`;
+};
+
+export const uploadBase64ToStorage = async (base64Data: string): Promise<string> => {
+  const arr = base64Data.split(',');
+  const mimeMatch = arr[0].match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+  
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while(n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+  }
+  const blob = new Blob([u8arr], {type: mime});
+  
+  return uploadFileToStorage(blob);
+};
+
 const ADMIN_CODE = "497778960517";
 
 export const verifyAdminCode = (code: any): boolean => {

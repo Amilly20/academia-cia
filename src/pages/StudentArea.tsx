@@ -9,7 +9,7 @@ import { useNavigate, useLocation, Link } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Copy, AlertCircle, Calendar, Users, Package, CreditCard, CheckCircle, Upload, MessageCircle, Loader2, Trash2, Camera, Wallet, Send } from "lucide-react";
-import { getFirebaseData, setFirebaseData, generateStudentPayments, generateAutomaticNotifications } from "@/lib/localStorage";
+import { getFirebaseData, setFirebaseData, generateStudentPayments, generateAutomaticNotifications, uploadBase64ToStorage, uploadFileToStorage } from "@/lib/localStorage";
 
 export default function StudentArea() {
   const [uniqueCode, setUniqueCode] = useState("");
@@ -26,7 +26,7 @@ export default function StudentArea() {
   const [myNotifications, setMyNotifications] = useState<any[]>([]);
   const [paymentProofs, setPaymentProofs] = useState<any[]>([]);
   const [pixKey, setPixKey] = useState("00074814540");
-  const [pendingProofs, setPendingProofs] = useState<Record<string, any>>({});
+  const [dialogOpenStates, setDialogOpenStates] = useState<Record<string, boolean>>({});
 
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -34,7 +34,7 @@ export default function StudentArea() {
 
   // Função para comprimir imagens antes de salvar no banco para evitar lentidão
   const compressImage = (file: File): Promise<string> => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onload = (event) => {
@@ -45,17 +45,28 @@ export default function StudentArea() {
           let width = img.width;
           let height = img.height;
           const MAX_WIDTH = 800;
+                const MAX_HEIGHT = 1200;
           if (width > MAX_WIDTH) {
             height = Math.round((height * MAX_WIDTH) / width);
             width = MAX_WIDTH;
           }
+                if (height > MAX_HEIGHT) {
+                  width = Math.round((width * MAX_HEIGHT) / height);
+                  height = MAX_HEIGHT;
+                }
           canvas.width = width;
           canvas.height = height;
           const ctx = canvas.getContext("2d");
-          ctx?.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL("image/jpeg", 0.6)); // 60% de qualidade
+                if (ctx) {
+                  ctx.fillStyle = "#ffffff";
+                  ctx.fillRect(0, 0, width, height);
+                  ctx.drawImage(img, 0, 0, width, height);
+                }
+                resolve(canvas.toDataURL("image/jpeg", 0.5)); // 50% de qualidade
         };
+        img.onerror = () => reject(new Error("Formato de imagem não suportado pelo navegador. Tente enviar em JPG ou PNG, ou tire um print do comprovante."));
       };
+      reader.onerror = () => reject(new Error("Erro ao ler o arquivo."));
     });
   };
 
@@ -137,6 +148,13 @@ export default function StudentArea() {
     };
 
     checkSession();
+    
+    window.addEventListener('focus', checkSession);
+    window.addEventListener('storage', checkSession);
+    return () => {
+      window.removeEventListener('focus', checkSession);
+      window.removeEventListener('storage', checkSession);
+    };
   }, [navigate, location.state]);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -182,42 +200,54 @@ export default function StudentArea() {
     proofs.push(proofObj);
     data.paymentProofs = proofs;
 
-    // Dá a baixa automática na mensalidade (seja com comprovante ou apenas confirmando)
-    const payments = Object.values(data.payments || {});
-    const paymentIndex = payments.findIndex((pay: any) => pay.id === p.id);
-    
-    if (paymentIndex !== -1) {
-      const payment = payments[paymentIndex] as any;
-      payment.status = "paid";
-      payment.paid_date = new Date().toISOString().split("T")[0];
-
-      // Envia a notificação de sucesso pro aluno
-      let notifications = Object.values(data.notifications || {});
-      const amount = Number(payment.amount).toFixed(2).replace(".", ",");
-      const dueDate = format(new Date(payment.due_date + "T12:00:00"), "dd/MM/yyyy", { locale: ptBR });
+    if (!proofObj.isCash) {
+      // Dá a baixa automática na mensalidade se enviou comprovante
+      const payments = Object.values(data.payments || {});
+      const paymentIndex = payments.findIndex((pay: any) => pay.id === p.id);
       
-      notifications = notifications.filter((n: any) => 
-        !(n.student_id === payment.student_id && (n.title === "Lembrete de Cobrança" || n.title === "Cobrança de Mensalidade"))
-      );
+      if (paymentIndex !== -1) {
+        const payment = payments[paymentIndex] as any;
+        payment.status = "paid";
+        payment.paid_date = new Date().toISOString().split("T")[0];
 
-      notifications.push({
-        id: Date.now().toString(),
-        student_id: payment.student_id,
-        title: "Pagamento Confirmado! ✅",
-        description: `Seu pagamento de R$ ${amount} referente ao vencimento ${dueDate} foi baixado com sucesso no sistema.`,
-        created_at: new Date().toISOString()
+        // Envia a notificação de sucesso pro aluno
+        let notifications = Object.values(data.notifications || {});
+        const amount = Number(payment.amount).toFixed(2).replace(".", ",");
+        const dueDate = format(new Date(payment.due_date + "T12:00:00"), "dd/MM/yyyy", { locale: ptBR });
+        
+        notifications = notifications.filter((n: any) => 
+          !(n.student_id === payment.student_id && (n.title === "Lembrete de Cobrança" || n.title === "Cobrança de Mensalidade"))
+        );
+
+        notifications.push({
+          id: Date.now().toString(),
+          student_id: payment.student_id,
+          title: "Pagamento Confirmado! ✅",
+          description: `Seu pagamento de R$ ${amount} referente ao vencimento ${dueDate} foi baixado com sucesso no sistema.`,
+          created_at: new Date().toISOString()
+        });
+        data.notifications = notifications;
+        data.payments = payments;
+      }
+
+      await setFirebaseData(data);
+      setPaymentProofs(proofs);
+      setMyPayments(prev => prev.filter((pay: any) => pay.id !== p.id));
+      
+      toast({ 
+        title: "Pagamento Confirmado!", 
+        description: "Sua mensalidade foi baixada automaticamente pelo sistema."
       });
-      data.notifications = notifications;
+    } else {
+      // Se for dinheiro, só salva o aviso e espera aprovação manual
+      await setFirebaseData(data);
+      setPaymentProofs(proofs);
+      
+      toast({ 
+        title: "Aviso Enviado!", 
+        description: "O gestor foi notificado e dará a baixa na sua mensalidade."
+      });
     }
-
-    await setFirebaseData(data);
-    setPaymentProofs(proofs);
-    setMyPayments(prev => prev.filter((pay: any) => pay.id !== p.id));
-    
-    toast({ 
-      title: "Pagamento Confirmado!", 
-      description: "Sua mensalidade foi baixada automaticamente pelo sistema."
-    });
 
     // Dispara o Webhook (Make.com) de forma invisível para o usuário
     if (settings.webhookUrl) {
@@ -245,16 +275,31 @@ export default function StudentArea() {
         console.error("Failed to send webhook", err);
       }
     }
+
+    // Dispara notificação via Telegram (Instântaneo e Gratuito)
+    if (settings.telegramToken && settings.telegramChatId) {
+      try {
+        const amountStr = Number(p.amount).toFixed(2).replace(".", ",");
+        const message = `💰 *Novo Pagamento!*\n\nO aluno *${loggedInStudent.full_name}* informou um pagamento de *R$ ${amountStr}*.`;
+        const url = `https://api.telegram.org/bot${settings.telegramToken}/sendMessage?chat_id=${settings.telegramChatId}&text=${encodeURIComponent(message)}&parse_mode=Markdown`;
+        
+        fetch(url).catch(e => console.error("Telegram error:", e));
+      } catch (err) {
+        console.error("Failed to send Telegram notification", err);
+      }
+    }
   };
 
   const handleProfilePictureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const newImageUrl = await compressImage(file);
-      setLoggedInStudent(prev => ({ ...prev, profile_picture_url: newImageUrl }));
-      toast({ title: "Foto de perfil atualizada!" });
-
       try {
+        toast({ title: "Fazendo upload..." });
+        const compressedData = await compressImage(file);
+        const newImageUrl = await uploadBase64ToStorage(compressedData);
+        setLoggedInStudent((prev: any) => ({ ...prev, profile_picture_url: newImageUrl }));
+        toast({ title: "Foto de perfil atualizada!" });
+
         const data = await getFirebaseData();
         const studentsArray = Object.values(data.students || {});
         const studentIndex = studentsArray.findIndex((s: any) => s.id === loggedInStudent.id);
@@ -264,7 +309,7 @@ export default function StudentArea() {
           await setFirebaseData(data);
         }
       } catch (error) {
-        toast({ title: "Erro ao salvar a foto", variant: "destructive" });
+        toast({ title: "Erro", description: error.message || "Erro ao salvar a foto", variant: "destructive" });
       }
     }
   };
@@ -357,7 +402,7 @@ export default function StudentArea() {
           </div>
           <div>
             <h1 className="text-3xl font-heading font-bold text-foreground">Olá, {loggedInStudent.full_name}!</h1>
-            <p className="text-muted-foreground mt-1">Bem-vindo à sua Área do Aluno Cia fitness.</p>
+            <p className="text-muted-foreground mt-1">Bem-vindo à sua Área do Aluno Cia fitness!</p>
           </div>
         </div>
         <Button variant="outline" onClick={handleLogout}>Sair</Button>
@@ -543,11 +588,11 @@ export default function StudentArea() {
                         const proof = paymentProofs.find((pr: any) => pr.paymentId === p.id);
                         return (
                           <div className="bg-blue-500/10 text-blue-500 text-sm font-medium p-3 rounded-lg flex items-center justify-center gap-2 mt-2 border border-blue-500/20">
-                            <CheckCircle className="w-4 h-4" /> {proof.isCash ? "Pagamento em análise" : "Comprovante em análise"}
+                            <CheckCircle className="w-4 h-4" /> {proof.isCash ? "Pagamento presencial em análise" : "Comprovante em análise"}
                           </div>
                         );
                       })() : (
-                      <Dialog>
+                      <Dialog open={dialogOpenStates[p.id]} onOpenChange={(open) => setDialogOpenStates(prev => ({ ...prev, [p.id]: open }))}>
                         <DialogTrigger asChild>
                           <Button className="w-full gap-2 gradient-primary text-primary-foreground border-0 mb-2">
                             <CreditCard className="w-4 h-4" /> Pagar Agora
@@ -591,52 +636,33 @@ export default function StudentArea() {
                                 type="file" 
                                 accept="image/*,.pdf" 
                                 className="cursor-pointer"
-                                onChange={(e) => {
+                                onChange={async (e) => {
                                   const file = e.target.files?.[0];
                                   if (file) {
-                                    if (file.type === "application/pdf") {
-                                      const reader = new FileReader();
-                                      reader.onloadend = () => {
-                                        const proof = {
-                                          paymentId: p.id,
-                                          fileName: file.name,
-                                          fileData: reader.result,
-                                          uploadedAt: new Date().toISOString(),
-                                        };
-                                        setPendingProofs(prev => ({ ...prev, [p.id]: proof }));
+                                    toast({ title: "Enviando comprovante...", description: "Otimizando e fazendo upload seguro para o Storage." });
+                                    try {
+                                      let downloadUrl: string;
+                                      const isPdf = file.type === "application/pdf" || file.name?.toLowerCase().endsWith(".pdf");
+                                      // Se for PDF faz upload direto, senão força a compressão (protege contra prints de celular sem MIME type)
+                                      if (!isPdf) {
+                                        const compressedData = await compressImage(file);
+                                        downloadUrl = await uploadBase64ToStorage(compressedData);
+                                      } else {
+                                        downloadUrl = await uploadFileToStorage(file);
+                                      }
+                                      const proof = {
+                                        paymentId: p.id,
+                                        fileName: file.name || "comprovante.jpg",
+                                        fileData: downloadUrl, // Salva APENAS o link curto retornado (https://...)
+                                        uploadedAt: new Date().toISOString(),
                                       };
-                                      reader.readAsDataURL(file);
-                                    } else {
-                                      compressImage(file).then((compressedData) => {
-                                        const proof = {
-                                          paymentId: p.id,
-                                          fileName: file.name,
-                                          fileData: compressedData,
-                                          uploadedAt: new Date().toISOString(),
-                                        };
-                                        setPendingProofs(prev => ({ ...prev, [p.id]: proof }));
-                                      });
-                                    }
+                                      setDialogOpenStates(prev => ({ ...prev, [p.id]: false }));
+                                      setTimeout(() => { handlePaymentSubmission(p, proof); }, 300);
+                                    } catch (error: any) { toast({ title: "Erro no upload", description: error.message, variant: "destructive" }); }
                                   }
                                 }}
                               />
                           <p className="text-xs text-muted-foreground mt-2">📎 Faça uma captura de tela ou tire uma foto do comprovante e selecione-o acima</p>
-                          
-                          {pendingProofs[p.id] && (
-                            <Button 
-                              className="w-full mt-4 bg-success hover:bg-success/90 text-white gap-2"
-                              onClick={() => {
-                                handlePaymentSubmission(p, pendingProofs[p.id]);
-                                setPendingProofs(prev => {
-                                  const next = {...prev};
-                                  delete next[p.id];
-                                  return next;
-                                });
-                              }}
-                            >
-                              <Upload className="w-4 h-4" /> Enviar Comprovante Selecionado
-                            </Button>
-                          )}
                             </div>
 
                             <div className="relative my-4">
@@ -648,25 +674,34 @@ export default function StudentArea() {
                               </div>
                             </div>
 
-                          <div className="bg-success/5 p-4 rounded-xl border border-success/20">
-                            <Label className="text-base font-semibold text-success mb-2 block">Já realizou o pagamento?</Label>
-                            <p className="text-xs text-muted-foreground mb-4">Clique abaixo para confirmar o pagamento instantaneamente caso não queira enviar o comprovante em imagem.</p>
+                          <div>
+                            <Label className="text-base font-semibold mb-3 block">Pagamento Presencial</Label>
                             <Button 
-                              className="w-full gap-2 bg-success hover:bg-success/90 text-white shadow-sm"
+                              variant="outline" 
+                              className="w-full gap-2"
                                 onClick={() => {
                                   const proof = {
                                     paymentId: p.id,
-                                  fileName: "Confirmado pelo Aluno",
+                                  fileName: "Pagamento em Dinheiro ou Cartão",
                                     fileData: null,
                                     isCash: true,
                                     uploadedAt: new Date().toISOString(),
                                   };
-                                  handlePaymentSubmission(p, proof);
+                                  setDialogOpenStates(prev => ({ ...prev, [p.id]: false }));
+                                  setTimeout(() => {
+                                    handlePaymentSubmission(p, proof);
+                                  }, 300);
                                 }}
                               >
-                              <CheckCircle className="w-4 h-4" /> Confirmar Pagamento Agora
+                              <Wallet className="w-4 h-4" /> Informar pagamento em dinheiro ou cartão na academia
                               </Button>
                             </div>
+
+                          <div className="bg-info/5 p-4 rounded-lg border border-info/20 mt-2">
+                            <p className="text-xs text-muted-foreground">
+                              ℹ️ Ao enviar o comprovante a mensalidade será baixada automaticamente. Pagamentos presenciais aguardarão aprovação.
+                            </p>
+                          </div>
 
                           </div>
                         </DialogContent>

@@ -2,9 +2,14 @@ import { useState, useEffect } from "react";
 import StatsCard from "@/StatsCard";
 import BirthdayList from "@/BirthdayList";
 import OverduePaymentsList from "@/OverduePaymentsList";
-import { Users, AlertTriangle, TrendingUp, Megaphone, PackageSearch, Loader2, MessageCircle } from "lucide-react";
+import { Users, AlertTriangle, TrendingUp, Megaphone, PackageSearch, Loader2, MessageCircle, Lock, Unlock } from "lucide-react";
 import { Link } from "react-router-dom";
 import { getFirebaseData, setFirebaseData, generateStudentPayments, generateAutomaticNotifications } from "@/lib/localStorage";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { toast } from "@/hooks/use-toast";
 
 export default function Dashboard() {
   const [stats, setStats] = useState<{
@@ -16,6 +21,9 @@ export default function Dashboard() {
   const [recentLost, setRecentLost] = useState<any[]>([]);
   const [recentMessages, setRecentMessages] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRevenueVisible, setIsRevenueVisible] = useState(false);
+  const [revenuePassword, setRevenuePassword] = useState("");
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -79,6 +87,17 @@ export default function Dashboard() {
     fetchData();
   }, []);
 
+  const handleUnlockRevenue = () => {
+    if (revenuePassword === "davi.2017") {
+      setIsRevenueVisible(true);
+      setIsPasswordDialogOpen(false);
+      setRevenuePassword("");
+      toast({ title: "Receita Desbloqueada", description: "O valor da receita total está visível." });
+    } else {
+      toast({ title: "Senha incorreta", description: "A senha digitada está errada.", variant: "destructive" });
+    }
+  };
+
   if (isLoading) {
     return <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   }
@@ -103,12 +122,63 @@ export default function Dashboard() {
           icon={AlertTriangle}
           variant="destructive"
         />
-        <StatsCard
-          title="Receita Total"
-          value={`R$ ${(stats?.totalRevenue ?? 0).toFixed(2)}`}
-          icon={TrendingUp}
-          variant="default"
-        />
+        
+        {isRevenueVisible ? (
+          <div className="relative">
+            <StatsCard
+              title="Receita Total"
+              value={`R$ ${(stats?.totalRevenue ?? 0).toFixed(2).replace(".", ",")}`}
+              icon={TrendingUp}
+              variant="default"
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-4 right-4 h-8 w-8 text-muted-foreground hover:text-foreground"
+              onClick={() => setIsRevenueVisible(false)}
+              title="Ocultar receita"
+            >
+              <Unlock className="w-4 h-4" />
+            </Button>
+          </div>
+        ) : (
+          <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
+            <DialogTrigger asChild>
+              <div className="relative cursor-pointer group" title="Clique para desbloquear">
+                <StatsCard
+                  title="Receita Total"
+                  value="R$ ****"
+                  icon={TrendingUp}
+                  variant="default"
+                />
+                <div className="absolute top-5 right-5 opacity-50 group-hover:opacity-100 transition-opacity">
+                  <Lock className="w-5 h-5 text-muted-foreground" />
+                </div>
+              </div>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px] bg-card">
+              <DialogHeader>
+                <DialogTitle className="font-heading">Desbloquear Receita</DialogTitle>
+              </DialogHeader>
+              <div className="py-4">
+                <Label htmlFor="password">Senha de acesso</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Digite a senha..."
+                  value={revenuePassword}
+                  onChange={(e) => setRevenuePassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleUnlockRevenue()}
+                  className="mt-2 font-mono"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setIsPasswordDialogOpen(false)}>Cancelar</Button>
+                <Button onClick={handleUnlockRevenue} className="bg-primary text-primary-foreground">Desbloquear</Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

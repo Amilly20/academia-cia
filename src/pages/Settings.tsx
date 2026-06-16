@@ -3,8 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-import { Save, Image as ImageIcon, ShieldCheck, Copy, CreditCard, Loader2, Trash2, AlertTriangle, Globe } from "lucide-react";
-import { getFirebaseData, setFirebaseData } from "@/lib/localStorage";
+import { Save, Image as ImageIcon, ShieldCheck, Copy, CreditCard, Loader2, Trash2, AlertTriangle, Globe, MessageSquare } from "lucide-react";
+import { getFirebaseData, setFirebaseData, uploadBase64ToStorage } from "@/lib/localStorage";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,8 +25,12 @@ export default function Settings() {
   const [editingPix, setEditingPix] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState("");
   const [editingWebhook, setEditingWebhook] = useState(false);
+  const [telegramToken, setTelegramToken] = useState("");
+  const [telegramChatId, setTelegramChatId] = useState("");
+  const [editingTelegram, setEditingTelegram] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [isClearingProofs, setIsClearingProofs] = useState(false);
+  const [isClearingSystem, setIsClearingSystem] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -39,12 +43,18 @@ export default function Settings() {
       if (settings.webhookUrl) {
         setWebhookUrl(settings.webhookUrl);
       }
+      if (settings.telegramToken) {
+        setTelegramToken(settings.telegramToken);
+      }
+      if (settings.telegramChatId) {
+        setTelegramChatId(settings.telegramChatId);
+      }
     };
     fetchData();
   }, []);
 
   const compressImage = (file: File): Promise<string> => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onload = (event) => {
@@ -65,15 +75,23 @@ export default function Settings() {
           ctx?.drawImage(img, 0, 0, width, height);
           resolve(canvas.toDataURL("image/png", 0.8));
         };
+        img.onerror = () => reject(new Error("Formato de imagem não suportado. Tente enviar uma imagem JPG ou PNG."));
       };
+      reader.onerror = () => reject(new Error("Erro ao ler o arquivo de imagem."));
     });
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const compressedData = await compressImage(file);
-      setLogoUrl(compressedData);
+      try {
+        toast({ title: "Fazendo upload..." });
+        const compressedData = await compressImage(file);
+        const downloadUrl = await uploadBase64ToStorage(compressedData);
+        setLogoUrl(downloadUrl);
+      } catch (err: any) {
+        toast({ title: "Erro", description: err.message, variant: "destructive" });
+      }
     }
   };
 
@@ -115,6 +133,17 @@ export default function Settings() {
     setEditingWebhook(false);
   };
 
+  const handleSaveTelegram = async () => {
+    const data = await getFirebaseData();
+    if (!data.settings) data.settings = {};
+    data.settings.telegramToken = telegramToken;
+    data.settings.telegramChatId = telegramChatId;
+    await setFirebaseData(data);
+    
+    toast({ title: "Telegram configurado", description: "Notificações ativadas com sucesso!" });
+    setEditingTelegram(false);
+  };
+
   const handleClearProofs = async () => {
     setIsClearingProofs(true);
     try {
@@ -126,6 +155,21 @@ export default function Settings() {
       toast({ title: "Erro ao limpar comprovantes", variant: "destructive" });
     } finally {
       setIsClearingProofs(false);
+    }
+  };
+
+  const handleClearSystem = async () => {
+    setIsClearingSystem(true);
+    try {
+      const data = await getFirebaseData();
+      data.notifications = []; // Apaga todo o histórico de notificações automáticas
+      data.messages = []; // Apaga todo o histórico de conversas do chat
+      await setFirebaseData(data);
+      toast({ title: "Sistema Otimizado!", description: "Avisos e mensagens antigas foram apagadas. O sistema está mais rápido." });
+    } catch (error) {
+      toast({ title: "Erro ao otimizar", variant: "destructive" });
+    } finally {
+      setIsClearingSystem(false);
     }
   };
 
@@ -200,6 +244,53 @@ export default function Settings() {
         </div>
 
         <div>
+          <h3 className="text-lg font-heading font-semibold text-[#229ED9] mb-4 flex items-center gap-2">
+            <MessageSquare className="w-5 h-5" /> Notificações via Telegram (Grátis e Rápido)
+          </h3>
+          <div className="space-y-4 mb-6">
+            <p className="text-sm text-muted-foreground">
+              Configure um Bot do Telegram para receber notificações instantâneas de pagamento de forma 100% gratuita e sem lentidão.
+            </p>
+            {!editingTelegram ? (
+              <div className="bg-muted p-4 rounded-lg border border-border">
+                <p className="text-sm font-medium text-muted-foreground mb-2">Status do Telegram:</p>
+                <p className="text-sm font-mono text-card-foreground break-all">
+                  {telegramToken && telegramChatId ? "✅ Configurado e Ativo" : "❌ Não configurado"}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <Input 
+                  value={telegramToken} 
+                  onChange={(e) => setTelegramToken(e.target.value)}
+                  placeholder="Token do Bot (Ex: 123456:ABC-DEF12...)"
+                  className="font-mono text-sm"
+                />
+                <Input 
+                  value={telegramChatId} 
+                  onChange={(e) => setTelegramChatId(e.target.value)}
+                  placeholder="Seu Chat ID (Ex: 123456789)"
+                  className="font-mono text-sm"
+                />
+                <div className="flex gap-2 pt-2">
+                  <Button onClick={handleSaveTelegram} className="gap-2 bg-[#229ED9] hover:bg-[#1e8cc0] text-white border-0 flex-1">
+                    <Save className="w-4 h-4" /> Salvar Telegram
+                  </Button>
+                  <Button onClick={() => setEditingTelegram(false)} variant="outline" className="flex-1">
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            )}
+            {!editingTelegram && (
+              <Button onClick={() => setEditingTelegram(true)} variant="outline" className="w-full">
+                Configurar Telegram
+              </Button>
+            )}
+          </div>
+        </div>
+
+        <div>
           <h3 className="text-lg font-heading font-semibold text-warning mb-4 flex items-center gap-2">
             <AlertTriangle className="w-5 h-5" /> Manutenção e Limpeza
           </h3>
@@ -216,6 +307,21 @@ export default function Settings() {
                 className="mt-2 sm:mt-0 text-warning border-warning hover:bg-warning/10"
               >
                 {isClearingProofs ? "Limpando..." : "Limpar Comprovantes"}
+              </Button>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-t border-warning/20 pt-4">
+              <div>
+                <p className="font-medium text-card-foreground">Otimizar Sistema (Limpar Histórico)</p>
+                <p className="text-xs text-muted-foreground mt-1">Apaga notificações automáticas e mensagens antigas do chat para deixar o carregamento rápido. (Alunos e mensalidades não serão afetados).</p>
+              </div>
+              <Button 
+                variant="outline" 
+                onClick={handleClearSystem} 
+                disabled={isClearingSystem} 
+                className="mt-2 sm:mt-0 text-warning border-warning hover:bg-warning/10"
+              >
+                {isClearingSystem ? "Otimizando..." : "Otimizar Sistema"}
               </Button>
             </div>
           </div>

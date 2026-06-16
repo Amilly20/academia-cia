@@ -49,7 +49,7 @@ export default function StudentFormDialog({ onStudentCreated }: { onStudentCreat
 
       const uniqueCode = generateUniqueCode();
       const password = generatePassword();
-      const studentId = String(Math.max(...students.map((s: any) => parseInt(s.id) || 0)) + 1);
+      const studentId = String(Math.max(0, ...students.map((s: any) => parseInt(s.id) || 0)) + 1);
       
       const newStudent = {
         id: studentId,

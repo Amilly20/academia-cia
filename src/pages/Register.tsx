@@ -52,7 +52,7 @@ export default function Register() {
 
       const uniqueCode = generateUniqueCode();
       const newStudent = {
-        id: String(Math.max(...students.map((s: any) => parseInt(s.id) || 0)) + 1),
+        id: String(Math.max(0, ...students.map((s: any) => parseInt(s.id) || 0)) + 1),
         full_name: form.full_name,
         phone: cleanPhone,
         email: form.email,

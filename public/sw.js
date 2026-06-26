@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cia-fitness-v5'; // Versão do cache, mude se alterar os arquivos cacheados
+const CACHE_NAME = 'cia-fitness-v6'; // Versão do cache, mude se alterar os arquivos cacheados
 const urlsToCache = [
   '/',
   '/index.html',

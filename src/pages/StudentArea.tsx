@@ -339,8 +339,7 @@ export default function StudentArea() {
           proofs={paymentProofs}
           pixKey={pixKey}
           dialogOpenStates={dialogOpenStates}
-          setDialogOpenStates={setDialogOpenStates}
-          compressImage={compressImage}
+          setDialogOpenStates={setDialogOpenStates}          
           handlePaymentSubmission={handlePaymentSubmission}
           chatMessages={chatMessages}
           uploadBase64ToStorage={uploadBase64ToStorage}

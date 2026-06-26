@@ -1,6 +1,7 @@
-const FIREBASE_URL = "https://academiacia-b2ce9-default-rtdb.firebaseio.com";
+import { getDatabase, ref, get, set } from "firebase/database";
+import { getStorage, ref as storageRef, uploadString, getDownloadURL, uploadBytes } from "firebase/storage";
 
-export const localData = {
+const initialDataStructure = {
   students: [],
   payments: [],
   events: [],
@@ -10,72 +11,30 @@ export const localData = {
   paymentProofs: [],
   settings: {
     SYSTEM_LOGO: null,
-    PIX_KEY: "00074814540",
+    PIX_KEY: "00074814540"
   },
 };
 
-const generatePassword = (length = 12) => {
-  const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const lowercase = 'abcdefghijklmnopqrstuvwxyz';
-  const numbers = '0123456789';
-  const symbols = '!@#$%&*';
-  const allChars = uppercase + lowercase + numbers + symbols;
-  
-  let password = '';
-  password += uppercase.charAt(Math.floor(Math.random() * uppercase.length));
-  password += lowercase.charAt(Math.floor(Math.random() * lowercase.length));
-  password += numbers.charAt(Math.floor(Math.random() * numbers.length));
-  password += symbols.charAt(Math.floor(Math.random() * symbols.length));
-  
-  for (let i = password.length; i < length; i++) {
-    password += allChars.charAt(Math.floor(Math.random() * allChars.length));
-  }
-  
-  return password.split('').sort(() => Math.random() - 0.5).join('');
-};
-
-// Cache em memória para eliminar o tempo de carregamento entre as telas
-let cachedData: any = null;
-let fetchPromise: Promise<any> | null = null;
-
 /**
  * Fetches the entire database from Firebase.
- * If the database is empty, it seeds it with the initial `localData` structure.
+ * If the database is empty, it seeds it with the initial structure.
  */
-export const getFirebaseData = async (): Promise<typeof localData> => {
-  if (cachedData) return JSON.parse(JSON.stringify(cachedData));
-  if (fetchPromise) {
-    const data = await fetchPromise;
-    return JSON.parse(JSON.stringify(data));
-  }
-
-  fetchPromise = (async () => {
-    try {
-      const response = await fetch(`${FIREBASE_URL}/.json`);
-      if (!response.ok) throw new Error(`Firebase fetch failed: ${response.statusText}`);
-      let data = await response.json();
-      
-      if (!data) {
-        console.log("Firebase is empty, seeding with initial data...");
-        await setFirebaseData(localData);
-        data = localData;
-      } else {
-        for (const key in localData) {
-          if (!data.hasOwnProperty(key)) data[key] = (localData as any)[key];
-        }
-      }
-      cachedData = data;
-      return data;
-    } catch (error) {
-      console.error("Failed to get initial data from Firebase:", error);
-      return localData;
-    } finally {
-      fetchPromise = null;
+export const getFirebaseData = async (): Promise<any> => {
+  try {
+    const db = getDatabase();
+    const snapshot = await get(ref(db));
+    let data = snapshot.val();
+    
+    if (!data) {
+      console.log("Firebase is empty, seeding with initial data...");
+      await setFirebaseData(initialDataStructure);
+      return initialDataStructure;
     }
-  })();
-
-  const finalData = await fetchPromise;
-  return JSON.parse(JSON.stringify(finalData));
+    return data;
+  } catch (error) {
+    console.error("Failed to get initial data from Firebase:", error);
+    throw error;
+  }
 };
 
 /**
@@ -84,20 +43,45 @@ export const getFirebaseData = async (): Promise<typeof localData> => {
  */
 export const setFirebaseData = async (data: unknown) => {
   try {
-    // Atualiza o cache local imediatamente (Optimistic UI)
-    cachedData = JSON.parse(JSON.stringify(data));
-
-    const response = await fetch(`${FIREBASE_URL}/.json`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-      headers: { 'Content-Type': 'application/json' }
-    });
-    if (!response.ok) {
-      throw new Error(`Firebase write failed: ${response.statusText}`);
-    }
+    const db = getDatabase();
+    await set(ref(db), data);
   } catch (error) {
     console.error("Failed to set data in Firebase:", error);
   }
+};
+
+export const compressImage = (file: File, quality = 0.7): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let { width, height } = img;
+        const MAX_WIDTH = 1024;
+        const MAX_HEIGHT = 1024;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height = Math.round((height * MAX_WIDTH) / width);
+            width = MAX_WIDTH;
+          }
+        } else if (height > MAX_HEIGHT) {
+          width = Math.round((width * MAX_HEIGHT) / height);
+          height = MAX_HEIGHT;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = (err) => reject(new Error("Falha ao carregar a imagem."));
+    };
+    reader.onerror = (err) => reject(new Error("Falha ao ler o arquivo."));
+  });
 };
 
 export const generateStudentPayments = (students: any[], payments: any[]): any[] => {
@@ -210,31 +194,15 @@ export const generateAutomaticNotifications = (data: any): boolean => {
   return modified;
 };
 
-export const uploadFileToStorage = async (file: File | Blob): Promise<string> => {
-  // Verificado: O bucketName está correto com o link do seu projeto no Firebase.
-  const bucketName = "academiacia-b2ce9.firebasestorage.app";
-  const mime = file.type || 'application/octet-stream';
-  let extension = 'bin';
-  if (mime === 'application/pdf') extension = 'pdf';
-  else if (mime === 'image/jpeg') extension = 'jpg';
-  else if (mime === 'image/png') extension = 'png';
-  else extension = mime.split('/')[1] || 'bin';
-
-  const name = `uploads/${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
-  const url = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o?name=${encodeURIComponent(name)}`;
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': mime },
-    body: file
-  });
-
-  if (!response.ok) throw new Error("Erro ao fazer upload do arquivo.");
-  const data = await response.json();
-  return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(name)}?alt=media&token=${data.downloadTokens}`;
+export const uploadFileToStorage = async (file: File): Promise<string> => {
+  const storage = getStorage();
+  const fileRef = storageRef(storage, `uploads/${Date.now()}_${file.name}`);
+  await uploadBytes(fileRef, file);
+  return getDownloadURL(fileRef);
 };
 
 export const uploadBase64ToStorage = async (base64Data: string): Promise<string> => {
+  const storage = getStorage();
   const arr = base64Data.split(',');
   const mimeMatch = arr[0].match(/:(.*?);/);
   const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
@@ -246,8 +214,9 @@ export const uploadBase64ToStorage = async (base64Data: string): Promise<string>
       u8arr[n] = bstr.charCodeAt(n);
   }
   const blob = new Blob([u8arr], {type: mime});
-  
-  return uploadFileToStorage(blob);
+  const fileRef = storageRef(storage, `uploads/${Date.now()}.jpg`);
+  await uploadBytes(fileRef, blob);
+  return getDownloadURL(fileRef);
 };
 
 const ADMIN_CODE = "497778960517";
@@ -266,4 +235,12 @@ export const verifyAdminCode = (code: any): boolean => {
   return match;
 };
 
-export { generatePassword };
+export const generatePassword = (length = 8) => {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  const charactersLength = characters.length;
+  for (let i = 0; i < length; i++) {
+    result += characters.charAt(Math.floor(Math.random() * charactersLength));
+  }
+  return result;
+};

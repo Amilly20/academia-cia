@@ -7,7 +7,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { toast } from "@/hooks/use-toast";
-import { getFirebaseData, setFirebaseData } from "@/lib/localStorage";
+import { getFirebaseData, setFirebaseData, compressImage } from "@/lib/localStorage";
 import { useState, useEffect } from "react";
 
 export const StudentAnnouncements = ({ announcements }: { announcements: any[] }) => {
@@ -199,7 +199,7 @@ export const StudentNotifications = ({ notifications, onDelete }: { notification
 };
 
 export const StudentPayments = (props: any) => {
-    const { payments, proofs, pixKey, dialogOpenStates, setDialogOpenStates, compressImage, handlePaymentSubmission, loggedInStudent, chatMessages, setChatMessages, uploadBase64ToStorage, uploadFileToStorage } = props;
+    const { payments, proofs, pixKey, dialogOpenStates, setDialogOpenStates, handlePaymentSubmission, loggedInStudent, chatMessages, setChatMessages, uploadBase64ToStorage, uploadFileToStorage } = props;
     const [newMessage, setNewMessage] = useState("");
 
     const handleSendMessage = async (e: React.FormEvent) => {

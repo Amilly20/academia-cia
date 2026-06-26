@@ -381,6 +381,8 @@ export default function StudentArea() {
           compressImage={compressImage}
           handlePaymentSubmission={handlePaymentSubmission}
           chatMessages={chatMessages}
+          uploadBase64ToStorage={uploadBase64ToStorage}
+          uploadFileToStorage={uploadFileToStorage}
           loggedInStudent={loggedInStudent}
           setChatMessages={setChatMessages}
         />

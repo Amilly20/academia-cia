@@ -22,28 +22,5 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script>
-      // Script para forçar a remoção de Service Workers antigos e problemáticos.
-      // Isso garante que o navegador não fique preso em um cache com defeito.
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function(registrations) {
-          if (registrations.length > 0) {
-            console.log('Removendo Service Workers antigos...');
-            for(let registration of registrations) {
-              registration.unregister();
-            }
-            // Recarrega a página uma vez para garantir que tudo seja carregado sem o SW antigo.
-            window.location.reload();
-          } else {
-            // Se não houver SW antigo, registra o novo normalmente.
-            window.addEventListener('load', () => {
-              navigator.serviceWorker.register('/sw.js').catch(error => {
-                console.log('Falha no registro do ServiceWorker: ', error);
-              });
-            });
-          }
-        });
-      }
-    </script>
   </body>
 </html>

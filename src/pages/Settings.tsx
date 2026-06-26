@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { Save, Image as ImageIcon, ShieldCheck, Copy, CreditCard, Loader2, Trash2, AlertTriangle, Globe, MessageSquare } from "lucide-react";
-import { getFirebaseData, setFirebaseData, uploadBase64ToStorage } from "@/lib/localStorage";
+import { getFirebaseData, setFirebaseData, uploadBase64ToStorage, compressImage } from "@/lib/localStorage";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,34 +53,6 @@ export default function Settings() {
     fetchData();
   }, []);
 
-  const compressImage = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (event) => {
-        const img = new Image();
-        img.src = event.target?.result as string;
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          let width = img.width;
-          let height = img.height;
-          const MAX_WIDTH = 400; // Logo não precisa ser maior que 400px
-          if (width > MAX_WIDTH) {
-            height = Math.round((height * MAX_WIDTH) / width);
-            width = MAX_WIDTH;
-          }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          ctx?.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL("image/png", 0.8));
-        };
-        img.onerror = () => reject(new Error("Formato de imagem não suportado. Tente enviar uma imagem JPG ou PNG."));
-      };
-      reader.onerror = () => reject(new Error("Erro ao ler o arquivo de imagem."));
-    });
-  };
-
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -89,7 +61,7 @@ export default function Settings() {
         const compressedData = await compressImage(file);
         const downloadUrl = await uploadBase64ToStorage(compressedData);
         setLogoUrl(downloadUrl);
-      } catch (err: any) {
+      } catch (err: any) { 
         toast({ title: "Erro", description: err.message, variant: "destructive" });
       }
     }

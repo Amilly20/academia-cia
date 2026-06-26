@@ -8,8 +8,8 @@ import { useNavigate, useLocation, Link } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { MessageCircle, Loader2, Camera } from "lucide-react";
-import { getFirebaseData, setFirebaseData, generateStudentPayments, generateAutomaticNotifications, uploadBase64ToStorage, uploadFileToStorage } from "@/lib/localStorage";
-import { StudentAnnouncements, StudentBirthdays, StudentEvents, StudentLostFound, StudentNotifications, StudentPayments } from '@/components/student-area-components';
+import { getFirebaseData, setFirebaseData, generateStudentPayments, generateAutomaticNotifications, uploadBase64ToStorage, uploadFileToStorage, compressImage } from "@/lib/localStorage";
+import { StudentAnnouncements, StudentBirthdays, StudentEvents, StudentLostFound, StudentNotifications, StudentPayments } from "@/components/student-area-components";
 
 export default function StudentArea() {
   const [uniqueCode, setUniqueCode] = useState("");
@@ -30,44 +30,6 @@ export default function StudentArea() {
   const [chatMessages, setChatMessages] = useState<any[]>([]);
 
   const [isChatOpen, setIsChatOpen] = useState(false);
-
-  // Função para comprimir imagens antes de salvar no banco para evitar lentidão
-  const compressImage = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (event) => {
-        const img = new Image();
-        img.src = event.target?.result as string;
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          let width = img.width;
-          let height = img.height;
-          const MAX_WIDTH = 800;
-                const MAX_HEIGHT = 1200;
-          if (width > MAX_WIDTH) {
-            height = Math.round((height * MAX_WIDTH) / width);
-            width = MAX_WIDTH;
-          }
-                if (height > MAX_HEIGHT) {
-                  width = Math.round((width * MAX_HEIGHT) / height);
-                  height = MAX_HEIGHT;
-                }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-                if (ctx) {
-                  ctx.fillStyle = "#ffffff";
-                  ctx.fillRect(0, 0, width, height);
-                  ctx.drawImage(img, 0, 0, width, height);
-                }
-                resolve(canvas.toDataURL("image/jpeg", 0.5)); // 50% de qualidade
-        };
-        img.onerror = () => reject(new Error("Formato de imagem não suportado pelo navegador. Tente enviar em JPG ou PNG, ou tire um print do comprovante."));
-      };
-      reader.onerror = () => reject(new Error("Erro ao ler o arquivo."));
-    });
-  };
 
   const loadStudentData = async (student: any, allData: any) => {
     let currentData = allData;

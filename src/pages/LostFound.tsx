@@ -7,8 +7,8 @@ import { toast } from "@/hooks/use-toast";
 import { Plus, Check, Trash2, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { getFirebaseData, setFirebaseData, uploadBase64ToStorage } from "@/lib/localStorage";
+import { ptBR } from "date-fns/locale"; 
+import { getFirebaseData, setFirebaseData, uploadBase64ToStorage, compressImage } from "@/lib/localStorage";
 
 export default function LostFound() {
   const [open, setOpen] = useState(false);
@@ -39,34 +39,6 @@ export default function LostFound() {
     };
   }, []);
 
-  const compressImage = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (event) => {
-        const img = new Image();
-        img.src = event.target?.result as string;
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          let width = img.width;
-          let height = img.height;
-          const MAX_WIDTH = 800;
-          if (width > MAX_WIDTH) {
-            height = Math.round((height * MAX_WIDTH) / width);
-            width = MAX_WIDTH;
-          }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          ctx?.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL("image/jpeg", 0.8));
-        };
-        img.onerror = () => reject(new Error("Formato de imagem não suportado. Tente enviar uma imagem JPG ou PNG."));
-      };
-      reader.onerror = () => reject(new Error("Erro ao ler o arquivo de imagem."));
-    });
-  };
-
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -75,7 +47,7 @@ export default function LostFound() {
         const compressedData = await compressImage(file);
         const downloadUrl = await uploadBase64ToStorage(compressedData);
         setForm((f) => ({ ...f, image_url: downloadUrl }));
-      } catch (err: any) {
+      } catch (err: any) { 
         toast({ title: "Erro", description: err.message, variant: "destructive" });
       }
     }

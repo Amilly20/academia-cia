@@ -27,20 +27,12 @@ export default function Landing() {
     }
 
     setIsLoggingIn(true);
-    try {
-      if (verifyAdminCode(adminCode)) {
-        navigate("/dashboard");
-      } else {
-        toast({ title: "Código incorreto!", variant: "destructive" });
-      }
-    } catch (error) {
-      toast({
-        title: "Erro ao fazer login",
-        description: "Ocorreu um problema ao tentar verificar o código.",
-        variant: "destructive",
-      });
-      console.error("Admin login error:", error);
-    } finally {
+    // A verificação agora é síncrona e mais simples
+    if (verifyAdminCode(adminCode)) {
+      toast({ title: "Login bem-sucedido!" });
+      navigate("/dashboard");
+    } else {
+      toast({ title: "Código incorreto!", variant: "destructive" });
       setIsLoggingIn(false);
     }
   };

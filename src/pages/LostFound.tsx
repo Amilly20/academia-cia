@@ -152,7 +152,10 @@ export default function LostFound() {
             <Button className="gap-2 gradient-primary text-primary-foreground border-0"><Plus className="w-4 h-4" /> Novo Item</Button>
           </DialogTrigger>
           <DialogContent className="bg-card">
-            <DialogHeader><DialogTitle className="font-heading">Registrar Objeto</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle className="font-heading">Registrar Objeto</DialogTitle>
+              <p className="text-sm text-muted-foreground pt-1">Adicione um item encontrado na academia para que os alunos possam vê-lo.</p>
+            </DialogHeader>
             <div className="space-y-4 mt-4">
               <div>
                 <Label>Nome/Título do Item</Label>

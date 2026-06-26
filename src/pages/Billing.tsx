@@ -234,7 +234,10 @@ export default function Billing() {
             </Button>
           </DialogTrigger>
           <DialogContent className="bg-card">
-            <DialogHeader><DialogTitle className="font-heading">Registrar Mensalidade</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle className="font-heading">Registrar Mensalidade</DialogTitle>
+              <p className="text-sm text-muted-foreground pt-1">Crie uma nova cobrança manual para um aluno específico.</p>
+            </DialogHeader>
             <div className="space-y-4 mt-4">
               <div>
                 <Label>Aluno</Label>
@@ -362,7 +365,10 @@ export default function Billing() {
                           </Button>
                         </DialogTrigger>
                         <DialogContent className="max-w-md">
-                          <DialogHeader><DialogTitle>Comprovante - {p.students?.full_name || "Aluno"}</DialogTitle></DialogHeader>
+                          <DialogHeader>
+                            <DialogTitle>Comprovante - {p.students?.full_name || "Aluno"}</DialogTitle>
+                            <p className="text-sm text-muted-foreground pt-1">Análise do comprovante de pagamento enviado pelo aluno.</p>
+                          </DialogHeader>
                           <div className="mt-4 flex flex-col items-center gap-4">
                             {proof.isCash ? (
                               <div className="bg-muted p-8 rounded-lg text-center w-full border border-border">

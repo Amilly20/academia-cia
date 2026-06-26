@@ -135,6 +135,7 @@ export default function Announcements() {
           <DialogContent className="bg-card">
             <DialogHeader>
               <DialogTitle className="font-heading">Criar Novo Aviso</DialogTitle>
+              <p className="text-sm text-muted-foreground pt-1">O aviso será exibido para todos os alunos na área do aluno.</p>
             </DialogHeader>
             <div className="space-y-4 mt-4">
               <div>

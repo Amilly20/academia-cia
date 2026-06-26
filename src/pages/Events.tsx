@@ -131,7 +131,10 @@ export default function Events() {
             <Button className="gap-2 gradient-primary text-primary-foreground border-0"><Plus className="w-4 h-4" /> Novo Evento</Button>
           </DialogTrigger>
           <DialogContent className="bg-card">
-            <DialogHeader><DialogTitle className="font-heading">Criar Evento</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle className="font-heading">Criar Evento</DialogTitle>
+              <p className="text-sm text-muted-foreground pt-1">Cadastre datas comemorativas ou eventos que aparecerão para os alunos.</p>
+            </DialogHeader>
             <div className="space-y-4 mt-4">
               <div><Label>Título</Label><Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} /></div>
               <div><Label>Data</Label><Input type="date" value={form.event_date} onChange={(e) => setForm((f) => ({ ...f, event_date: e.target.value }))} /></div>

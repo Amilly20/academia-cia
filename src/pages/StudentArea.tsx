@@ -230,6 +230,15 @@ export default function StudentArea() {
         data.payments = payments;
       }
 
+      // Roda o gerador de mensalidades DE NOVO para garantir que a do próximo mês seja criada
+      const studentsArray = Object.values(data.students || {});
+      const currentPaymentsArray = Object.values(data.payments || {});
+      const updatedPayments = generateStudentPayments(studentsArray, currentPaymentsArray);
+      if (updatedPayments.length > currentPaymentsArray.length) {
+        data.payments = updatedPayments;
+      }
+      // Fim da adição
+
       await setFirebaseData(data);
       setPaymentProofs(proofs);
       setMyPayments(prev => prev.filter((pay: any) => pay.id !== p.id));
@@ -242,6 +251,7 @@ export default function StudentArea() {
       // Se for dinheiro, só salva o aviso e espera aprovação manual
       await setFirebaseData(data);
       setPaymentProofs(proofs);
+      setMyPayments(prev => prev.filter((pay: any) => pay.id !== p.id));
       
       toast({ 
         title: "Aviso Enviado!", 
@@ -601,6 +611,7 @@ export default function StudentArea() {
                         <DialogContent className="bg-card max-w-md">
                           <DialogHeader>
                             <DialogTitle className="font-heading">Pagamento de Mensalidade</DialogTitle>
+                            <p className="text-sm text-muted-foreground pt-1">Realize o pagamento via PIX e envie o comprovante para dar baixa.</p>
                           </DialogHeader>
                           <div className="mt-4 space-y-4">
                             <div className="bg-muted/50 p-4 rounded-lg border border-border">

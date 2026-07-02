@@ -376,10 +376,8 @@ export default function Billing() {
                               <p className="text-lg font-medium text-foreground">Pagamento Presencial</p>
                               <p className="text-sm text-muted-foreground mt-2">O aluno informou que o pagamento foi realizado presencialmente em dinheiro ou cartão.</p>
                               </div>
-                            ) : proof.fileData?.startsWith("data:application/pdf") || proof.fileName?.toLowerCase().endsWith('.pdf') ? (
-                              <iframe src={proof.fileData} className="w-full h-96 border rounded" />
                             ) : (
-                              <img src={proof.fileData} alt="Comprovante" className="max-w-full max-h-96 object-contain rounded" />
+                              <img src={proof.fileData} alt="Comprovante" className="max-w-full max-h-[60vh] object-contain rounded" />
                             )}
                             {p.status !== "paid" && (
                               <Button onClick={() => handleMarkPaid(p.id)} className="w-full bg-success hover:bg-success/90 text-white">

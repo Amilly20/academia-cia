@@ -201,6 +201,7 @@ export const StudentNotifications = ({ notifications, onDelete }: { notification
 export const StudentPayments = (props: any) => {
     const { payments, proofs, pixKey, dialogOpenStates, setDialogOpenStates, handlePaymentSubmission, loggedInStudent, chatMessages, setChatMessages, uploadBase64ToStorage, uploadFileToStorage } = props;
     const [newMessage, setNewMessage] = useState("");
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -229,6 +230,28 @@ export const StudentPayments = (props: any) => {
           toast({ title: "Erro ao enviar mensagem", variant: "destructive" });
         }
       };
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setSelectedFile(file);
+        }
+    };
+
+    const handleProofSubmit = async (paymentId: string) => {
+        if (!selectedFile) return;
+
+        toast({ title: "Processando comprovante..." });
+        try {
+            const isPdf = selectedFile.type === "application/pdf" || selectedFile.name?.toLowerCase().endsWith(".pdf");
+            if (isPdf) { toast({ title: "Atenção", description: "O envio de PDF foi desativado. Por favor, envie uma imagem (print) do comprovante.", variant: "destructive" }); return; }
+            const base64Data = await compressImage(selectedFile);
+            const proof = { paymentId: paymentId, fileName: selectedFile.name || "comprovante.jpg", fileData: base64Data, uploadedAt: new Date().toISOString(), };
+            setDialogOpenStates((prev: any) => ({ ...prev, [paymentId]: false }));
+            setTimeout(() => { handlePaymentSubmission({ id: paymentId }, proof); }, 300);
+            setSelectedFile(null); // Limpa o arquivo após o envio
+        } catch (error: any) { toast({ title: "Erro ao processar imagem", description: error.message, variant: "destructive" }); }
+    };
 
     return (
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
@@ -302,11 +325,13 @@ export const StudentPayments = (props: any) => {
                                                     </div>
                                                     <p className="text-xs text-muted-foreground mt-2">💡 Copie a chave e abra seu banco para fazer a transferência PIX</p>
                                                 </div>
-                                                <div>
+                                <div className="space-y-3">
                                                     <Label className="text-base font-semibold mb-3 block">Enviar Comprovante</Label>
-                                                    <Input type="file" accept="image/*,.pdf" className="cursor-pointer" onChange={async (e) => { const file = e.target.files?.[0]; if (file) { toast({ title: "Enviando comprovante...", description: "Otimizando e fazendo upload seguro para o Storage." }); try { let downloadUrl: string; const isPdf = file.type === "application/pdf" || file.name?.toLowerCase().endsWith(".pdf"); if (!isPdf) { const compressedData = await compressImage(file); downloadUrl = await uploadBase64ToStorage(compressedData); } else { downloadUrl = await uploadFileToStorage(file); } const proof = { paymentId: p.id, fileName: file.name || "comprovante.jpg", fileData: downloadUrl, uploadedAt: new Date().toISOString(), }; setDialogOpenStates((prev: any) => ({ ...prev, [p.id]: false })); setTimeout(() => { handlePaymentSubmission(p, proof); }, 300); } catch (error: any) { toast({ title: "Erro no upload", description: error.message, variant: "destructive" }); } } }} />
-                                                    <Input type="file" accept="image/*,.pdf" className="cursor-pointer" onChange={async (e) => { const file = e.target.files?.[0]; if (file) { toast({ title: "Processando comprovante..." }); try { const isPdf = file.type === "application/pdf" || file.name?.toLowerCase().endsWith(".pdf"); if (isPdf) { toast({ title: "Atenção", description: "O envio de PDF foi desativado. Por favor, envie uma imagem (print) do comprovante.", variant: "destructive" }); return; } const base64Data = await compressImage(file); const proof = { paymentId: p.id, fileName: file.name || "comprovante.jpg", fileData: base64Data, uploadedAt: new Date().toISOString(), }; setDialogOpenStates((prev: any) => ({ ...prev, [p.id]: false })); setTimeout(() => { handlePaymentSubmission(p, proof); }, 300); } catch (error: any) { toast({ title: "Erro ao processar imagem", description: error.message, variant: "destructive" }); } } }} />
+                                    <Input type="file" accept="image/*" className="cursor-pointer" onChange={handleFileSelect} />
                                                     <p className="text-xs text-muted-foreground mt-2">📎 Faça uma captura de tela ou tire uma foto do comprovante e selecione-o acima</p>
+                                    <Button onClick={() => handleProofSubmit(p.id)} disabled={!selectedFile} className="w-full gap-2">
+                                        <Send className="w-4 h-4" /> Enviar Comprovante
+                                    </Button>
                                                 </div>
                                                 <div className="relative my-4"><div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border" /></div><div className="relative flex justify-center text-xs uppercase"><span className="bg-card px-2 text-muted-foreground">Ou</span></div></div>
                                                 <div>

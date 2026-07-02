@@ -93,14 +93,7 @@ export default function StudentArea() {
     };
 
     checkSession();
-    
-    window.addEventListener('focus', checkSession);
-    window.addEventListener('storage', checkSession);
-    return () => {
-      window.removeEventListener('focus', checkSession);
-      window.removeEventListener('storage', checkSession);
-    };
-  }, [navigate, location.state]);
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

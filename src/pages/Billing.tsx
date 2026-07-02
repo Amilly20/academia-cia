@@ -72,14 +72,7 @@ export default function Billing() {
   useEffect(() => {
     fetchData();
     
-    const handleFocusOrStorage = () => fetchData(false);
-    window.addEventListener('focus', handleFocusOrStorage);
-    window.addEventListener('storage', handleFocusOrStorage);
-    return () => {
-      window.removeEventListener('focus', handleFocusOrStorage);
-      window.removeEventListener('storage', handleFocusOrStorage);
-    };
-  }, []);
+  }, []); // Removido o recarregamento em foco para melhorar a performance
 
   const handleCreatePayment = async () => {
     if (!form.student_id || !form.amount || !form.due_date) return;
